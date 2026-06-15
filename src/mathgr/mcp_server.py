@@ -405,9 +405,12 @@ def create_mcp():
             "MathGR symbolic tensor/GR toolkit. PRIMARY RULE: use mathgr_compute "
             "as the first-choice tool for almost all MathGR calculations. It accepts "
             "single expressions and multi-line notebook blocks with assignments. "
-            "Prefer the default context: omit the context argument unless you need "
-            "parallel/incompatible calculation branches. Do not create new contexts "
-            "for ordinary retries or probes. "
+            "Default call style: pass only the expr string. Omit context, output, "
+            "timeout_seconds, and other optional arguments unless they are actually "
+            "needed. JSON is only the transport format; do not show or prefer JSON-style "
+            "examples when a string call like mathgr_compute(\"Simp(x)\") is enough. "
+            "Use the default context: omit context unless you need parallel/incompatible "
+            "calculation branches. Do not create new contexts for ordinary retries or probes. "
             "Put ordinary MathGR calls such as Simp, Decomp0i, Ibp, OO(2), ToTeXString "
             "inside mathgr_compute. Use mathgr_parse, mathgr_inspect, and "
             "mathgr_script only for debugging/reproduction. Use mathgr_run_python "
@@ -483,7 +486,7 @@ def create_mcp():
         store_as: str | None = None,
         timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
     ) -> dict[str, Any]:
-        """PRIMARY calculation tool: evaluate expressions or multi-line notebook blocks; persists assignments in context."""
+        """PRIMARY calculation tool. Default: pass only expr and use default context; omit optional args unless needed."""
         return compute_mathgr(
             expr,
             context=context,
@@ -565,7 +568,7 @@ def create_mcp():
 
     @mcp.tool()
     def mathgr_context_clear(context: str = "default") -> dict[str, Any]:
-        """Clear a named MathGR context."""
+        """Clear a named MathGR context. Do not call by default; use only when intentionally resetting state."""
         return clear_mathgr_context(context)
 
     @mcp.tool()

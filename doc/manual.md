@@ -1055,6 +1055,9 @@ heads, and scalar symbols, and persists assignments in a context. Use
 `mathgr_parse`, `mathgr_inspect`, and `mathgr_script` only for debugging or
 reproduction. Use `mathgr_run_python` / `mathgr_eval` only as last-resort
 debugging escape hatches when `mathgr_compute` cannot express the workflow.
+For ordinary calls, pass only the expression string and omit optional fields
+such as `context`, `output`, and `timeout_seconds`. JSON objects are only the MCP
+transport format; examples and traces should prefer `mathgr_compute("...")`.
 
 Example:
 

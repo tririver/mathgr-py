@@ -321,6 +321,9 @@ tensor heads, scalar symbols, and a persistent default context. Use multi-line
 `mathgr_compute` blocks for setup work; use `mathgr_parse`, `mathgr_inspect`,
 and `mathgr_script` only for debugging. Use `mathgr_run_python` /
 `mathgr_eval` only when `mathgr_compute` cannot express the workflow.
+For ordinary calls, pass only the expression string and omit optional fields
+such as `context`, `output`, and `timeout_seconds`. JSON objects are only the MCP
+transport format; examples and traces should prefer `mathgr_compute("...")`.
 
 Example:
 

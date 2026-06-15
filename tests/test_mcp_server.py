@@ -459,3 +459,22 @@ def test_create_mcp_registers_mathgr_tools():
     assert "mathgr_context_create" not in registered
     assert "mathgr_context_update" not in registered
     assert "mathgr_topic" not in registered
+
+
+def test_mcp_guidance_prefers_expr_only_default_context_calls():
+    async def read_guidance():
+        params = StdioServerParameters(command="uv", args=["run", "mathgr-mcp"])
+        async with stdio_client(params) as (read, write):
+            async with ClientSession(read, write) as session:
+                initialized = await session.initialize()
+                tools = await session.list_tools()
+                descriptions = {tool.name: tool.description or "" for tool in tools.tools}
+                return initialized.instructions or "", descriptions
+
+    instructions, descriptions = asyncio.run(read_guidance())
+
+    assert "pass only the expr string" in instructions
+    assert "omit context" in instructions
+    assert "JSON is only the transport format" in instructions
+    assert "pass only expr" in descriptions["mathgr_compute"]
+    assert "Do not call by default" in descriptions["mathgr_context_clear"]
