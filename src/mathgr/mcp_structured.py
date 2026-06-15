@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import ast
+import copy
 import json
 from dataclasses import dataclass
 from itertools import count
 from functools import wraps
 from importlib import import_module
+from multiprocessing import get_context
 from pathlib import Path
+from queue import Empty
+import sys
 import time
 from typing import Any
 
@@ -23,6 +27,7 @@ DEFAULT_CONTEXT_NAME = "default"
 CONTEXT_SCHEMA_VERSION = 1
 _CONTEXT_COUNTER = count(1)
 _CONTEXTS: dict[str, dict[str, Any]] = {}
+_STRUCTURED_BODIES: dict[str, Any] = {}
 
 _BUILTIN_INDEX_FAMILIES = {
     "UP",
@@ -305,9 +310,10 @@ def simplify_mathgr(
     """Auto-declare a Python-like expression, run `Simp`, and return diagnostics."""
     started = time.perf_counter()
     try:
+        context_name = _ensure_context(context) if store_as else context
         prepared = _prepare_runtime(
             [expr, *_hook_exprs(hooks)],
-            context=context,
+            context=context_name,
             auto_declare=auto_declare,
             declarations=declarations,
             index_dims=index_dims,
@@ -326,7 +332,7 @@ def simplify_mathgr(
             options["hooks"] = hook_values
         simplified = mathgr.Simp(value, **options)
         if store_as:
-            _store_expression(context, store_as, str(simplified))
+            _store_expression(context_name, store_as, str(simplified))
         return _operation_response(
             simplified,
             prepared,
@@ -1585,6 +1591,7 @@ def _snapshot_mathgr_state() -> dict[str, Any]:
         "metric_heads": set(tensor_module._METRIC_HEADS),
         "metric_index_pairs": {key: list(value) for key, value in tensor_module._METRIC_INDEX_PAIRS.items()},
         "symmetries": {key: list(value) for key, value in tensor_module._SYMMETRIES.items()},
+        "uniq_counter_value": tensor_module._UNIQ_COUNTER_VALUE,
         "idx_list": list(tensor_module.IdxList),
         "idx_up_list": list(tensor_module.IdxUpList),
         "idx_dn_list": list(tensor_module.IdxDnList),
@@ -1616,6 +1623,7 @@ def _restore_mathgr_state(state: dict[str, Any]) -> None:
     tensor_module._METRIC_INDEX_PAIRS.update({key: list(value) for key, value in state["metric_index_pairs"].items()})
     tensor_module._SYMMETRIES.clear()
     tensor_module._SYMMETRIES.update({key: list(value) for key, value in state["symmetries"].items()})
+    tensor_module._UNIQ_COUNTER_VALUE = state["uniq_counter_value"]
     tensor_module.IdxList[:] = state["idx_list"]
     tensor_module.IdxUpList[:] = state["idx_up_list"]
     tensor_module.IdxDnList[:] = state["idx_dn_list"]
@@ -1643,16 +1651,83 @@ def _isolated_mathgr_state(func):
     return wrapper
 
 
-parse_mathgr = _isolated_mathgr_state(parse_mathgr)
-compute_mathgr = _isolated_mathgr_state(compute_mathgr)
-simplify_mathgr = _isolated_mathgr_state(simplify_mathgr)
-compare_mathgr = _isolated_mathgr_state(compare_mathgr)
-inspect_mathgr = _isolated_mathgr_state(inspect_mathgr)
-derivative_mathgr = _isolated_mathgr_state(derivative_mathgr)
-rewrite_mathgr = _isolated_mathgr_state(rewrite_mathgr)
-decompose_mathgr = _isolated_mathgr_state(decompose_mathgr)
-series_mathgr = _isolated_mathgr_state(series_mathgr)
-ibp_mathgr = _isolated_mathgr_state(ibp_mathgr)
-transform_mathgr = _isolated_mathgr_state(transform_mathgr)
-tex_mathgr = _isolated_mathgr_state(tex_mathgr)
-script_mathgr = _isolated_mathgr_state(script_mathgr)
+def _structured_timeout(func):
+    name = func.__name__
+    default_timeout = (func.__kwdefaults__ or {}).get("timeout_seconds")
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        timeout = kwargs.get("timeout_seconds", default_timeout)
+        if timeout is None:
+            return func(*args, **kwargs)
+        try:
+            seconds = float(timeout)
+        except (TypeError, ValueError):
+            return func(*args, **kwargs)
+        if seconds <= 0:
+            return func(*args, **kwargs)
+
+        started = time.perf_counter()
+        seconds = max(0.001, seconds)
+        context = get_context("fork") if sys.platform != "win32" else get_context("spawn")
+        queue = context.Queue(maxsize=1)
+        process = context.Process(
+            target=_structured_tool_worker,
+            args=(name, args, kwargs, _copy_contexts(_CONTEXTS), queue),
+        )
+        process.start()
+        process.join(seconds)
+        if process.is_alive():
+            process.terminate()
+            process.join(1)
+            return _error_response(TimeoutError(f"structured MathGR operation timed out after {seconds:g} seconds."), started)
+
+        try:
+            payload = queue.get_nowait()
+        except Empty:
+            return _error_response(
+                RuntimeError(f"structured MathGR worker exited with code {process.exitcode} without a result."),
+                started,
+            )
+
+        response = payload["response"]
+        if response.get("ok"):
+            _CONTEXTS.clear()
+            _CONTEXTS.update(payload["contexts"])
+        return response
+
+    return wrapper
+
+
+def _structured_tool_worker(name: str, args, kwargs, contexts, queue) -> None:
+    _CONTEXTS.clear()
+    _CONTEXTS.update(_copy_contexts(contexts))
+    try:
+        response = _isolated_mathgr_state(_STRUCTURED_BODIES[name])(*args, **kwargs)
+        queue.put({"response": response, "contexts": _copy_contexts(_CONTEXTS)})
+    except BaseException as exc:
+        queue.put({"response": _error_response(exc, time.perf_counter()), "contexts": contexts})
+
+
+def _copy_contexts(contexts: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    return copy.deepcopy(contexts)
+
+
+def _structured_tool(func):
+    _STRUCTURED_BODIES[func.__name__] = func
+    return _structured_timeout(_isolated_mathgr_state(func))
+
+
+parse_mathgr = _structured_tool(parse_mathgr)
+compute_mathgr = _structured_tool(compute_mathgr)
+simplify_mathgr = _structured_tool(simplify_mathgr)
+compare_mathgr = _structured_tool(compare_mathgr)
+inspect_mathgr = _structured_tool(inspect_mathgr)
+derivative_mathgr = _structured_tool(derivative_mathgr)
+rewrite_mathgr = _structured_tool(rewrite_mathgr)
+decompose_mathgr = _structured_tool(decompose_mathgr)
+series_mathgr = _structured_tool(series_mathgr)
+ibp_mathgr = _structured_tool(ibp_mathgr)
+transform_mathgr = _structured_tool(transform_mathgr)
+tex_mathgr = _structured_tool(tex_mathgr)
+script_mathgr = _structured_tool(script_mathgr)

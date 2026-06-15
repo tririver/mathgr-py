@@ -137,6 +137,17 @@ def test_with_metric_temporarily_scopes_metric_evaluation_and_restores_default()
     assert mathgr.WithMetric is gr_module.WithMetric
 
 
+def test_with_metric_does_not_leak_metric_registration_state():
+    scoped_u, scoped_d = declare_idx("wmLeakU", "wmLeakD", dim=4, index_set=LatinIdx, color="Black")
+    scoped_metric = tensor("g_with_metric_leak")
+    before = tensor_module._snapshot_tensor_registry_state()
+
+    gr_module.WithMetric(scoped_metric, (scoped_u, scoped_d), lambda: gr_module.Metric)
+    after = tensor_module._snapshot_tensor_registry_state()
+
+    assert after == before
+
+
 def test_affine_connection_uses_current_metric_and_partial_derivatives():
     u, d = declare_idx("au", "ad", dim=4, index_set=LatinIdx, color="Black")
     g = tensor("g_affine")

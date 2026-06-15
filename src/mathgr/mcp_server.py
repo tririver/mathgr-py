@@ -347,6 +347,7 @@ def _snapshot_mathgr_state() -> dict[str, Any]:
         "metric_heads": set(tensor_module._METRIC_HEADS),
         "metric_index_pairs": {key: list(value) for key, value in tensor_module._METRIC_INDEX_PAIRS.items()},
         "symmetries": {key: list(value) for key, value in tensor_module._SYMMETRIES.items()},
+        "uniq_counter_value": tensor_module._UNIQ_COUNTER_VALUE,
         "idx_list": list(tensor_module.IdxList),
         "idx_up_list": list(tensor_module.IdxUpList),
         "idx_dn_list": list(tensor_module.IdxDnList),
@@ -379,6 +380,7 @@ def _restore_mathgr_state(state: dict[str, Any]) -> None:
     tensor_module._METRIC_INDEX_PAIRS.update({key: list(value) for key, value in state["metric_index_pairs"].items()})
     tensor_module._SYMMETRIES.clear()
     tensor_module._SYMMETRIES.update({key: list(value) for key, value in state["symmetries"].items()})
+    tensor_module._UNIQ_COUNTER_VALUE = state["uniq_counter_value"]
 
     tensor_module.IdxList[:] = state["idx_list"]
     tensor_module.IdxUpList[:] = state["idx_up_list"]

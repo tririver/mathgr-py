@@ -274,9 +274,8 @@ def test_second_order_gw_pert_example_ports_final_quadratic_action_cell():
 def test_second_order_pert_example_ports_zeta_gauge_action_setup_cells():
     from examples import second_order_pert
     import mathgr.gr as gr_module
-    from mathgr.util import OO
-    from mathgr.frwadm import Fourier2, LapseN, ShiftN, Sqrtg
-    from mathgr.tensor import Pd, PdT, PdVars, is_pdt, pdt_parts, tensor_head_name
+    from mathgr.frwadm import LapseN, ShiftN, Sqrtg
+    from mathgr.tensor import Pd, PdT, PdVars, tensor_head_name
 
     results = second_order_pert.main(compute_action=False)
 
@@ -289,6 +288,14 @@ def test_second_order_pert_example_ports_zeta_gauge_action_setup_cells():
     assert results["action_density"].has(second_order_pert.phi)
     assert not results["action_density"].has(gr_module.LapseN)
     assert not any(tensor_head_name(node) == "ShiftN" for node in sp.preorder_traversal(results["action_density"]))
+
+
+@pytest.mark.slow
+def test_second_order_pert_example_ports_zeta_gauge_action_reduction_cell():
+    from examples import second_order_pert
+    from mathgr.frwadm import Fourier2
+    from mathgr.tensor import is_pdt, pdt_parts, tensor_head_name
+    from mathgr.util import OO
 
     second_order_pre_fourier = OO(2, op=second_order_pert.Simp)(second_order_pert.action_density(simplify=True))
     assert not any(getattr(node, "func", None).__name__ == "_Dta" for node in sp.preorder_traversal(second_order_pre_fourier))

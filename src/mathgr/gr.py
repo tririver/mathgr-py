@@ -4,7 +4,20 @@ from itertools import count
 
 import sympy as sp
 
-from .tensor import DE, DN, UP, DeclareSym, Index, LatinIdx, Pd, Symmetric, tensor, register_metric
+from .tensor import (
+    DE,
+    DN,
+    UP,
+    DeclareSym,
+    Index,
+    LatinIdx,
+    Pd,
+    Symmetric,
+    _restore_tensor_registry_state,
+    _snapshot_tensor_registry_state,
+    tensor,
+    register_metric,
+)
 from .util_private import apply2term
 
 
@@ -136,17 +149,19 @@ def WithMetric(metric, indices=(UP, DN), expr=None):
     else:
         callback = expr if callable(expr) else (lambda: expr)
 
-    UseMetric(metric, indices, SetAsDefault=False)
     global Metric, IdxOfMetric
+    registry_state = _snapshot_tensor_registry_state()
     previous_metric = Metric
     previous_indices = IdxOfMetric
     try:
+        UseMetric(metric, indices, SetAsDefault=False)
         Metric = metric
         IdxOfMetric = tuple(indices)
         return callback()
     finally:
         Metric = previous_metric
         IdxOfMetric = previous_indices
+        _restore_tensor_registry_state(registry_state)
 
 
 def MetricContract(expr):

@@ -21,7 +21,7 @@ _METRICS: dict[str, Any] = {}
 _METRIC_HEADS: set[sp.Symbol] = set()
 _METRIC_INDEX_PAIRS: dict[sp.Symbol, list[tuple["IndexType", "IndexType"]]] = {}
 _SYMMETRIES: dict[tuple[sp.Symbol, tuple], list["TensorSymmetry"]] = {}
-_UNIQ_COUNTER = count(1)
+_UNIQ_COUNTER_VALUE = 1
 IdxList: list["IndexType"] = []
 IdxUpList: list["IndexType"] = []
 IdxDnList: list["IndexType"] = []
@@ -255,8 +255,15 @@ def _is_registered_implicit_index_type(index_type: IndexType) -> bool:
     return not index_type.explicit and any(existing.name == index_type.name for existing in IdxList)
 
 
+def _next_uniq_label():
+    global _UNIQ_COUNTER_VALUE
+    value = _UNIQ_COUNTER_VALUE
+    _UNIQ_COUNTER_VALUE += 1
+    return f"uq{value}"
+
+
 def Uniq(n: int):
-    return [f"uq{next(_UNIQ_COUNTER)}" for _ in range(int(n))]
+    return [_next_uniq_label() for _ in range(int(n))]
 
 
 def Uq(n: int):
@@ -265,6 +272,29 @@ def Uq(n: int):
 
 def UniqueIdx():
     return Uniq(50)
+
+
+def _snapshot_tensor_registry_state():
+    return {
+        "metrics": dict(_METRICS),
+        "metric_heads": set(_METRIC_HEADS),
+        "metric_index_pairs": {key: list(value) for key, value in _METRIC_INDEX_PAIRS.items()},
+        "symmetries": {key: list(value) for key, value in _SYMMETRIES.items()},
+        "uniq_counter_value": _UNIQ_COUNTER_VALUE,
+    }
+
+
+def _restore_tensor_registry_state(state):
+    global _UNIQ_COUNTER_VALUE
+    _METRICS.clear()
+    _METRICS.update(state["metrics"])
+    _METRIC_HEADS.clear()
+    _METRIC_HEADS.update(state["metric_heads"])
+    _METRIC_INDEX_PAIRS.clear()
+    _METRIC_INDEX_PAIRS.update({key: list(value) for key, value in state["metric_index_pairs"].items()})
+    _SYMMETRIES.clear()
+    _SYMMETRIES.update({key: list(value) for key, value in state["symmetries"].items()})
+    _UNIQ_COUNTER_VALUE = state["uniq_counter_value"]
 
 
 class _Dta(sp.Function):
@@ -1208,7 +1238,7 @@ def _freshen_hook_result_dummies(result, source):
 
 def _fresh_hook_dummy_label(used):
     while True:
-        candidate = f"uq{next(_UNIQ_COUNTER)}"
+        candidate = _next_uniq_label()
         if candidate not in used:
             return candidate
 

@@ -63,6 +63,15 @@ For scripts and libraries, prefer explicit imports from `mathgr`,
 `mathgr.tensor`, `mathgr.gr`, `mathgr.decomp`, `mathgr.frwadm`, `mathgr.util`,
 `mathgr.ibp`, and `mathgr.typeset`.
 
+Note: `from mathgr import tensor` imports the tensor-head factory. To inspect
+the `mathgr.tensor` submodule itself, use:
+
+```python
+import importlib
+
+tensor_module = importlib.import_module("mathgr.tensor")
+```
+
 Declare indices and tensors:
 
 ```python
@@ -212,6 +221,13 @@ Larger notebook ports may be expensive if you enable full action computation.
 Many expose flags such as `main(compute_action=False)`.
 
 See [doc/manual.md](doc/manual.md) for a more complete API manual.
+
+Create release/source archives from git so virtual environments and caches stay
+out of the upload:
+
+```bash
+git archive --format=zip --output mathgr-py-src.zip HEAD
+```
 
 ## MCP Interface
 

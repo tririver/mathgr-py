@@ -16,6 +16,7 @@ def preserve_mathgr_state():
         "metric_heads": set(tensor_module._METRIC_HEADS),
         "metric_index_pairs": {key: list(value) for key, value in tensor_module._METRIC_INDEX_PAIRS.items()},
         "symmetries": {key: list(value) for key, value in tensor_module._SYMMETRIES.items()},
+        "uniq_counter_value": tensor_module._UNIQ_COUNTER_VALUE,
         "idx_list": list(tensor_module.IdxList),
         "idx_up_list": list(tensor_module.IdxUpList),
         "idx_dn_list": list(tensor_module.IdxDnList),
@@ -26,6 +27,7 @@ def preserve_mathgr_state():
         "metric": gr_module.Metric,
         "idx_of_metric": tuple(gr_module.IdxOfMetric),
         "tex_hook": list(typeset_module.ToTeXHook),
+        "tex_template": typeset_module.ToTeXTemplate,
     }
     try:
         yield
@@ -44,6 +46,7 @@ def preserve_mathgr_state():
         )
         tensor_module._SYMMETRIES.clear()
         tensor_module._SYMMETRIES.update({key: list(value) for key, value in state["symmetries"].items()})
+        tensor_module._UNIQ_COUNTER_VALUE = state["uniq_counter_value"]
 
         tensor_module.IdxList[:] = state["idx_list"]
         tensor_module.IdxUpList[:] = state["idx_up_list"]
@@ -55,3 +58,4 @@ def preserve_mathgr_state():
         gr_module.Metric = state["metric"]
         gr_module.IdxOfMetric = state["idx_of_metric"]
         typeset_module.ToTeXHook[:] = state["tex_hook"]
+        typeset_module.ToTeXTemplate = state["tex_template"]

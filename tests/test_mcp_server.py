@@ -1,6 +1,10 @@
 import asyncio
 import json
 
+import pytest
+
+pytest.importorskip("mcp")
+
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
@@ -18,6 +22,7 @@ from mathgr.mcp_server import (
     script_mathgr,
     tex_mathgr,
 )
+from mathgr.mcp_structured import simplify_mathgr
 
 
 def test_list_mathgr_capabilities_groups_public_api_for_agents():
@@ -329,6 +334,24 @@ def test_compute_mathgr_supports_custom_expansion_symbol_directly():
 
     assert coefficient["ok"] is True
     assert coefficient["result"] == "3*x**2"
+
+
+def test_compute_mathgr_respects_timeout_for_expensive_expression():
+    result = compute_mathgr("Simp((1 + x)**3000)", timeout_seconds=0.1, output=["str"])
+
+    assert result["ok"] is False
+    assert "timed out" in result["stderr"]
+
+
+def test_simplify_mathgr_store_as_uses_default_context():
+    clear_mathgr_context("default")
+
+    result = simplify_mathgr("Dta(UP('a'), DN('a'))", store_as="trace")
+    fetched = get_mathgr_context()
+    clear_mathgr_context("default")
+
+    assert result["ok"] is True
+    assert fetched["expressions"]["trace"] == "DefaultDim"
 
 
 def test_create_mcp_registers_mathgr_tools():

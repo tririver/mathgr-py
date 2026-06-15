@@ -78,6 +78,16 @@ def test_declare_idx_records_duals_dimension_and_sets():
 
 def test_public_index_name_pools_are_exported_from_package_root_like_upstream():
     assert mathgr.LatinIdx is tensor_module.LatinIdx
+
+
+def test_tensor_state_snapshot_restores_uniq_counter():
+    state = tensor_module._snapshot_tensor_registry_state()
+    first = Uq(1)
+
+    tensor_module._restore_tensor_registry_state(state)
+    second = Uq(1)
+
+    assert second == first
     assert mathgr.GreekIdx is tensor_module.GreekIdx
     assert mathgr.LatinCapitalIdx is tensor_module.LatinCapitalIdx
 

@@ -17,6 +17,7 @@ from .tensor import (
     _freshen_hook_result_dummies,
     declare_idx,
 )
+from .rewrite import ReplaceAll
 
 
 DimTot = sp.Symbol("DimTot")
@@ -223,23 +224,7 @@ def _looks_like_rule_pair(value):
 
 
 def _apply_hook_rules(expr, rules):
-    replacements = tuple((sp.sympify(old), new if callable(new) else sp.sympify(new)) for old, new in rules)
-    exact = {
-        old: new
-        for old, new in replacements
-        if not callable(new) and not old.has(sp.Wild)
-    }
-    current = sp.sympify(expr).xreplace(exact)
-    for old, new in replacements:
-        if callable(new):
-            if old.has(sp.Wild):
-                current = current.replace(old, lambda **matches: sp.sympify(new(**matches)))
-            else:
-                current = current.replace(lambda node, old=old: node == old, lambda node: sp.sympify(new(node)))
-            continue
-        if old.has(sp.Wild):
-            current = current.replace(old, new)
-    return current
+    return ReplaceAll(expr, tuple(rules))
 
 
 def _contains_total_label(expr, label):

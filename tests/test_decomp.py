@@ -5,6 +5,7 @@ import mathgr.gr as gr_module
 from mathgr import decomp
 from mathgr.decomp import D1, D2, DTot, Decomp0123, Decomp01i, Decomp0i, Decomp123, Decomp1i, DecompSe, Dim1, Dim2, DimTot, U1, U2, UTot
 from mathgr.gr import R, UseMetric
+from mathgr.rewrite import ReplaceAll
 from mathgr.tensor import (
     DE,
     DN,
@@ -207,6 +208,16 @@ def test_decomp_hooks_accept_sympy_wild_pattern_rules_like_upstream_decomp_hook(
     )
 
 
+def test_decomp_hook_rules_match_replace_all_for_wild_patterns():
+    metric = tensor("metricReplaceAllDecompHook")
+    eta = tensor("etaReplaceAllDecompHook")
+    alpha = sp.Wild("alpha")
+    rules = [(metric(D1(alpha), U1(alpha)), eta(D1(alpha), U1(alpha)))]
+    expr = DecompSe(metric(DTot("p"), UTot("p")))
+
+    assert DecompSe(metric(DTot("p"), UTot("p")), hooks=rules) == ReplaceAll(expr, rules)
+
+
 def test_total_metric_evaluates_on_decomposed_dual_pairs_only_like_upstream():
     metric = tensor("metricDecompSectorDualPair")
     previous_metric = gr_module.Metric
@@ -390,6 +401,10 @@ def test_decompse_full_non_diagonal_metric_reduces_to_maxwell_form():
         )
 
         alpha, beta, gamma_i, delta = "alpha", "beta", "gamma", "delta"
+        # docs-local/fix.md records a Mathematica oracle with the opposite
+        # sign. WolframScript is not available in this environment, and
+        # changing this coefficient to -1/2 fails the current Python identity.
+        # Keep this convention explicit instead of silently diverging from the note.
         expected = (
             sp.Rational(1, 2)
             * F(U2("a"), D1(alpha), D1(beta))
