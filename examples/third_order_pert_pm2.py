@@ -4,11 +4,11 @@ from mathgr.frwadm import Simp
 from mathgr.tensor import DN, Pd, Pm2
 from mathgr.util import OO
 
-from .third_order_pert import action_density, phi
+from .third_order_pert import action_density, φ
 
 
 def chi_constraint():
-    return Pm2(Pd(phi, DN("i")), DN)
+    return Pm2(Pd(φ, DN("i")), DN)
 
 
 def third_order_action():
@@ -17,7 +17,7 @@ def third_order_action():
 
 def main(*, compute_orders=True):
     results = {
-        "gauge": "zeta",
+        "gauge": "ζ",
         "uses_pm2_constraints": True,
         "action_density": action_density(simplify=compute_orders),
         "constraint_kernel": chi_constraint(),

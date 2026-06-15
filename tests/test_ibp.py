@@ -268,14 +268,14 @@ def test_try_simp_simplifies_context_after_callable_wild_replacement_like_upstre
     field_strength = tensor("fieldStrengthTrySimpContext")
     weight = sp.Symbol("weightTrySimpContext")
     m = sp.Wild("m")
-    alpha = sp.Wild("alpha")
-    beta = sp.Wild("beta")
+    α = sp.Wild("α")
+    β = sp.Wild("β")
     expr = weight * Pd(vector(U2("i"), D1("a")), D1("b")) - weight * Pd(vector(U2("i"), D1("b")), D1("a"))
     rule = [
         (
-            Pd(vector(U2(m), D1(alpha)), D1(beta)),
-            lambda m, alpha, beta: field_strength(U2(m), D1(alpha), D1(beta))
-            + Pd(vector(U2(m), D1(beta)), D1(alpha)),
+            Pd(vector(U2(m), D1(α)), D1(β)),
+            lambda m, α, β: field_strength(U2(m), D1(α), D1(β))
+            + Pd(vector(U2(m), D1(β)), D1(α)),
         )
     ]
 
@@ -289,8 +289,8 @@ def test_try_simp_simplifies_large_replacement_context_without_expanding_unrelat
     field_strength = tensor("fieldStrengthTrySimpLargeContext")
     weight = sp.Symbol("weightTrySimpLargeContext")
     m = sp.Wild("m")
-    alpha = sp.Wild("alpha")
-    beta = sp.Wild("beta")
+    α = sp.Wild("α")
+    β = sp.Wild("β")
     noise = sum((sp.Symbol(f"trySimpNoiseX{n}") + 1) * (sp.Symbol(f"trySimpNoiseY{n}") + 2) for n in range(80))
     expr = (
         noise
@@ -299,9 +299,9 @@ def test_try_simp_simplifies_large_replacement_context_without_expanding_unrelat
     )
     rule = [
         (
-            Pd(vector(U2(m), D1(alpha)), D1(beta)),
-            lambda m, alpha, beta: field_strength(U2(m), D1(alpha), D1(beta))
-            + Pd(vector(U2(m), D1(beta)), D1(alpha)),
+            Pd(vector(U2(m), D1(α)), D1(β)),
+            lambda m, α, β: field_strength(U2(m), D1(α), D1(β))
+            + Pd(vector(U2(m), D1(β)), D1(α)),
         )
     ]
 

@@ -1682,7 +1682,8 @@ multi-line notebook blocks, auto-declares common tensor/index names, and
 persists assignments in the default or named context. Use `mathgr_context_get`
 to list context source definitions, `mathgr_context_save/load` for JSON
 persistence, and `mathgr_run_python` only when structured tools cannot express
-the calculation.
+the calculation. Omit `context` for normal workflows; use named contexts only
+for explicit parallel or incompatible calculation branches.
 """
 
 

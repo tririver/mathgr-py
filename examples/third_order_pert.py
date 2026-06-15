@@ -4,11 +4,11 @@ from mathgr.frwadm import DecompG2H, RADM, Simp, Sqrtg
 from mathgr.gr import V, X
 from mathgr.util import OO
 
-from .second_order_pert import phi
+from .second_order_pert import φ
 
 
 def action_density(*, simplify=True):
-    expr = Sqrtg * (RADM() / 2 + DecompG2H(lambda: X(phi)) - V(phi))
+    expr = Sqrtg * (RADM() / 2 + DecompG2H(lambda: X(φ)) - V(φ))
     return Simp(expr) if simplify else expr
 
 
@@ -18,7 +18,7 @@ def third_order_action():
 
 def main(*, compute_orders=True):
     results = {
-        "gauge": "zeta",
+        "gauge": "ζ",
         "sqrtg": Sqrtg,
         "action_density": action_density(simplify=compute_orders),
         "order_operator": OO(3, op=Simp),

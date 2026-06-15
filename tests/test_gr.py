@@ -358,22 +358,22 @@ def test_covariant_derivative_of_scalar_mixed_tensor_and_covector_matches_upstre
 def test_covariant_derivative_with_upper_derivative_index_raises_with_metric_like_upstream():
     u, d = declare_idx("cuu", "cud", dim=4, index_set=LatinIdx, color="Black")
     g = tensor("g_covd_upper")
-    phi = sp.Symbol("phi_covd_upper")
+    φ = sp.Symbol("phi_covd_upper")
     UseMetric(g, (u, d))
 
-    assert CovD(phi, u("m")) == g(u("a"), u("m")) * Pd(phi, d("a"))
+    assert CovD(φ, u("m")) == g(u("a"), u("m")) * Pd(φ, d("a"))
 
 
 def test_affine_and_covd_unsupported_signatures_remain_symbolic_like_mathematica():
-    phi = sp.Symbol("phi_affine_covd_inert")
+    φ = sp.Symbol("phi_affine_covd_inert")
     affine_head = tensor("Affine")
     covd_head = tensor("CovD")
 
     assert _unsupported_call_as_value(Affine) == affine_head()
     assert Affine(DN("a"), DN("b"), DN("c")) == affine_head(DN("a"), DN("b"), DN("c"))
     assert Affine(UP("a"), UP("b"), DN("c")) == affine_head(UP("a"), UP("b"), DN("c"))
-    assert _unsupported_call_as_value(CovD, phi) == covd_head(phi)
-    assert _unsupported_call_as_value(CovD, phi, DE(0)) == covd_head(phi, DE(0))
+    assert _unsupported_call_as_value(CovD, φ) == covd_head(φ)
+    assert _unsupported_call_as_value(CovD, φ, DE(0)) == covd_head(φ, DE(0))
 
 
 def test_einstein_tensor_down_down_matches_upstream_definition():
@@ -403,33 +403,33 @@ def test_einstein_tensor_accepts_mixed_metric_contract_slots_like_upstream():
 def test_scalar_field_helpers_match_upstream_definitions():
     u, d = declare_idx("xgu", "xgd", dim=4, index_set=LatinIdx, color="Black")
     g = tensor("g_scalar")
-    phi = sp.Symbol("phi")
+    φ = sp.Symbol("φ")
     UseMetric(g, (u, d))
 
-    assert X(phi) == -g(u("a"), u("b")) * Pd(phi, d("a")) * Pd(phi, d("b")) / 2
-    assert Dsquare(phi) == MetricContract(CovD(CovD(phi, DG(1)), DG(1)))
-    assert T(phi)(d("a"), d("b")) == (
-        g(d("a"), d("b")) * (X(phi) - V(phi)) + Pd(phi, d("a")) * Pd(phi, d("b"))
+    assert X(φ) == -g(u("a"), u("b")) * Pd(φ, d("a")) * Pd(φ, d("b")) / 2
+    assert Dsquare(φ) == MetricContract(CovD(CovD(φ, DG(1)), DG(1)))
+    assert T(φ)(d("a"), d("b")) == (
+        g(d("a"), d("b")) * (X(φ) - V(φ)) + Pd(φ, d("a")) * Pd(φ, d("b"))
     )
 
 
 def test_scalar_stress_tensor_unsupported_signatures_remain_symbolic_like_mathematica():
-    phi = sp.Symbol("phi_stress_inert")
+    φ = sp.Symbol("phi_stress_inert")
     stress_head = tensor("T")
 
-    assert T(phi)(UP("a"), DN("b")) == stress_head(phi, UP("a"), DN("b"))
-    assert T(phi)(DN("a")) == stress_head(phi, DN("a"))
+    assert T(φ)(UP("a"), DN("b")) == stress_head(φ, UP("a"), DN("b"))
+    assert T(φ)(DN("a")) == stress_head(φ, DN("a"))
 
 
 def test_scalar_operator_unsupported_signatures_remain_symbolic_like_mathematica():
-    phi = sp.Symbol("phi_scalar_operator_inert")
+    φ = sp.Symbol("phi_scalar_operator_inert")
     x_head = tensor("X")
     dsquare_head = tensor("Dsquare")
 
     assert _unsupported_call_as_value(X) == x_head()
-    assert _unsupported_call_as_value(X, phi, DN("a")) == x_head(phi, DN("a"))
+    assert _unsupported_call_as_value(X, φ, DN("a")) == x_head(φ, DN("a"))
     assert _unsupported_call_as_value(Dsquare) == dsquare_head()
-    assert _unsupported_call_as_value(Dsquare, phi, DN("a")) == dsquare_head(phi, DN("a"))
+    assert _unsupported_call_as_value(Dsquare, φ, DN("a")) == dsquare_head(φ, DN("a"))
 
 
 def test_adm_extrinsic_curvature_helpers_match_upstream_definitions():

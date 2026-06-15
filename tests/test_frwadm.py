@@ -13,16 +13,16 @@ from mathgr.frwadm import (
     Simp as FRWSimp,
     Sqrtg,
     a,
-    alpha,
+    α,
     b,
-    beta,
-    epsilon,
-    eta,
-    eta2,
-    eta3,
+    β,
+    ε,
+    η,
+    η2,
+    η3,
     h,
     k,
-    zeta,
+    ζ,
 )
 from mathgr.gr import R
 from mathgr.tensor import DE, DN, UE, UP, Dta, Pd, PdT, PdVars, tensor, tensor_head_name
@@ -67,11 +67,11 @@ def test_frw_shift_vector_is_transverse_like_upstream():
 
 
 def test_frw_background_lapse_shift_sqrtg_and_spatial_metric_definitions():
-    assert LapseN == 1 + Eps * alpha
-    assert ShiftN(DN("i")) == Eps * Pd(beta, DN("i")) + Eps * b(DN("i"))
-    assert Sqrtg == LapseN * sp.exp(3 * Eps * zeta) * a**3
-    assert h(DN("i"), DN("j")) == a**2 * sp.exp(2 * Eps * zeta) * Dta(DN("i"), DN("j"))
-    assert h(UP("i"), UP("j")) == sp.exp(-2 * Eps * zeta) * Dta(DN("i"), DN("j")) / a**2
+    assert LapseN == 1 + Eps * α
+    assert ShiftN(DN("i")) == Eps * Pd(β, DN("i")) + Eps * b(DN("i"))
+    assert Sqrtg == LapseN * sp.exp(3 * Eps * ζ) * a**3
+    assert h(DN("i"), DN("j")) == a**2 * sp.exp(2 * Eps * ζ) * Dta(DN("i"), DN("j"))
+    assert h(UP("i"), UP("j")) == sp.exp(-2 * Eps * ζ) * Dta(DN("i"), DN("j")) / a**2
 
 
 def test_frw_shiftn_unsupported_signatures_remain_symbolic_like_mathematica():
@@ -130,25 +130,25 @@ def test_frw_adm_helper_unsupported_signatures_remain_symbolic_like_mathematica(
 
 def test_frw_simp_applies_background_time_derivative_hooks():
     assert FRWSimp(Pd(a, DE(0))) == a * H
-    assert FRWSimp(PdT(a, PdVars(DE(0), DE(0)))) == a * H**2 - a * H**2 * epsilon
-    assert FRWSimp(Pd(H, DE(0))) == -epsilon * H**2
-    assert FRWSimp(PdT(H, PdVars(DE(0), DE(0)))) == 2 * H**3 * epsilon**2 - H**3 * epsilon * eta
+    assert FRWSimp(PdT(a, PdVars(DE(0), DE(0)))) == a * H**2 - a * H**2 * ε
+    assert FRWSimp(Pd(H, DE(0))) == -ε * H**2
+    assert FRWSimp(PdT(H, PdVars(DE(0), DE(0)))) == 2 * H**3 * ε**2 - H**3 * ε * η
     assert FRWSimp(PdT(H, PdVars(DE(0), DE(0), DE(0)))) == (
-        -6 * H**4 * epsilon**3
-        + 7 * H**4 * epsilon**2 * eta
-        - H**4 * epsilon * eta**2
-        - H**4 * epsilon * eta * eta2
+        -6 * H**4 * ε**3
+        + 7 * H**4 * ε**2 * η
+        - H**4 * ε * η**2
+        - H**4 * ε * η * η2
     )
-    assert FRWSimp(Pd(epsilon, DE(0))) == H * epsilon * eta
-    assert FRWSimp(Pd(eta, DE(0))) == H * eta2 * eta
-    assert FRWSimp(Pd(eta2, DE(0))) == H * eta3 * eta2
+    assert FRWSimp(Pd(ε, DE(0))) == H * ε * η
+    assert FRWSimp(Pd(η, DE(0))) == H * η2 * η
+    assert FRWSimp(Pd(η2, DE(0))) == H * η3 * η2
 
 
 def test_frw_simp_applies_background_spatial_derivative_and_dimension_hooks():
     assert FRWSimp(Pd(a, DN("i"))) == 0
     assert FRWSimp(Pd(H, DN("i"))) == 0
-    assert FRWSimp(Pd(epsilon, DN("i"))) == 0
-    assert FRWSimp(Pd(eta, DN("i"))) == 0
+    assert FRWSimp(Pd(ε, DN("i"))) == 0
+    assert FRWSimp(Pd(η, DN("i"))) == 0
     assert FRWSimp(Dta(DN("i"), DN("i"))) == 3
 
 

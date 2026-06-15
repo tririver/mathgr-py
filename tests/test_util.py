@@ -166,8 +166,8 @@ def test_treplace_replaces_tensor_factors_and_preserves_raw_dummy_power_labels()
 
 
 def test_treplace_replaces_powers_of_derivative_atoms():
-    phi0, A, B = sp.symbols("phi0 A B")
-    derivative = Pd(phi0, mathgr.DE(0))
+    φ0, A, B = sp.symbols("φ0 A B")
+    derivative = Pd(φ0, mathgr.DE(0))
 
     assert util.TReplace(3 * derivative**2 + derivative**4, {derivative**2: A, derivative**4: B}) == 3 * A + B
 

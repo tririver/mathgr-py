@@ -8,13 +8,13 @@ from mathgr.util import CollectEps, Eps
 
 a = sp.Symbol("a")
 H = sp.Symbol("H")
-epsilon = sp.Symbol("epsilon")
-eta = sp.Symbol("eta")
-eta2 = sp.Symbol("eta2")
-phi0 = sp.Symbol("phi0")
-varphi = sp.Symbol("varphi")
-delta_t = sp.Symbol("delta_t")
-delta_x = tensor("delta_x")
+ε = sp.Symbol("ε")
+η = sp.Symbol("η")
+η2 = sp.Symbol("η2")
+φ0 = sp.Symbol("φ0")
+δφ = sp.Symbol("δφ")
+δt = sp.Symbol("δt")
+δx = tensor("δx")
 
 
 def Simp(expr, **options):
@@ -26,9 +26,9 @@ def expand_at_xzg(field, label="a"):
     index = DN(label)
     return Simp(
         field
-        + Eps * Pd(field, DE(0)) * delta_t
-        + Eps**2 * PdT(field, PdVars(DE(0), DE(0))) * delta_t**2 / 2
-        + Eps**2 * Pd(field, index) * delta_x(index)
+        + Eps * Pd(field, DE(0)) * δt
+        + Eps**2 * PdT(field, PdVars(DE(0), DE(0))) * δt**2 / 2
+        + Eps**2 * Pd(field, index) * δx(index)
     )
 
 
@@ -53,7 +53,7 @@ def main():
     return {
         "default_dim": Simp(DefaultDim),
         "expanded_a": expand_at_xzg(a),
-        "expanded_field": expand_at_xzg(varphi),
+        "expanded_field": expand_at_xzg(δφ),
         "collected": col_simp,
     }
 
@@ -70,22 +70,22 @@ def _background_simp_hook(expr):
             return expr
         return expr.func(*rewritten_args)
     base, derivative_indices = pdt_parts(expr)
-    if base in {phi0, a, H, epsilon} and any(_is_index(index, DN) for index in derivative_indices):
+    if base in {φ0, a, H, ε} and any(_is_index(index, DN) for index in derivative_indices):
         return sp.Integer(0)
     if tuple(derivative_indices) == (DE(0),):
         if base == a:
             return a * H
         if base == H:
-            return -epsilon * H**2
-        if base == epsilon:
-            return H * epsilon * eta
-        if base == eta:
-            return H * eta2 * eta
+            return -ε * H**2
+        if base == ε:
+            return H * ε * η
+        if base == η:
+            return H * η2 * η
     if tuple(derivative_indices) == (DE(0), DE(0)):
         if base == a:
-            return a * H**2 - a * H**2 * epsilon
+            return a * H**2 - a * H**2 * ε
         if base == H:
-            return 2 * H**3 * epsilon**2 - H**3 * epsilon * eta
+            return 2 * H**3 * ε**2 - H**3 * ε * η
     return expr
 
 

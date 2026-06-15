@@ -218,11 +218,11 @@ def test_total_metric_delta_auto_evaluation_includes_decomposed_dual_families():
     metric = tensor("totalMetricFamilyCompatibility")
     UseMetric(metric, (UTot, DTot), SetAsDefault=False)
 
-    assert metric(U1("alpha"), D1("beta")) == Dta(U1("alpha"), D1("beta"))
+    assert metric(U1("α"), D1("β")) == Dta(U1("α"), D1("β"))
 
-    mixed_family_call = metric(UTot("mu"), D1("alpha"))
+    mixed_family_call = metric(UTot("mu"), D1("α"))
     assert tensor_module.tensor_head_name(mixed_family_call) == "totalMetricFamilyCompatibility"
-    assert tensor_module.tensor_args(mixed_family_call) == (UTot("mu"), D1("alpha"))
+    assert tensor_module.tensor_args(mixed_family_call) == (UTot("mu"), D1("α"))
 
 
 def test_generalized_delta_and_symmetrization():
@@ -282,12 +282,12 @@ def test_idx_free_dummy_and_partial_derivative_product_rule():
 
 
 def test_pd_unsupported_signatures_remain_symbolic_like_mathematica():
-    phi = sp.Symbol("phi_pd_inert")
+    φ = sp.Symbol("phi_pd_inert")
     pd_head = tensor("Pd")
 
     assert _unsupported_call_as_value(Pd) == pd_head()
-    assert _unsupported_call_as_value(Pd, phi) == pd_head(phi)
-    assert _unsupported_call_as_value(Pd, phi, DN("a"), DN("b")) == pd_head(phi, DN("a"), DN("b"))
+    assert _unsupported_call_as_value(Pd, φ) == pd_head(φ)
+    assert _unsupported_call_as_value(Pd, φ, DN("a"), DN("b")) == pd_head(φ, DN("a"), DN("b"))
 
 
 def test_idx_free_dummy_order_powered_indexed_factors_like_upstream():
@@ -379,12 +379,12 @@ def test_pdt_direct_constructor_folds_numeric_and_composite_bases_like_upstream(
 
 
 def test_pdt_unsupported_signatures_remain_symbolic_like_mathematica():
-    phi = sp.Symbol("phi_pdt_inert")
+    φ = sp.Symbol("phi_pdt_inert")
     pdt_head = tensor("PdT")
 
     assert _unsupported_call_as_value(PdT) == pdt_head()
-    assert _unsupported_call_as_value(PdT, phi) == pdt_head(phi)
-    assert _unsupported_call_as_value(PdT, phi, DN("a")) == pdt_head(phi, DN("a"))
+    assert _unsupported_call_as_value(PdT, φ) == pdt_head(φ)
+    assert _unsupported_call_as_value(PdT, φ, DN("a")) == pdt_head(φ, DN("a"))
 
 
 def test_pdt_direct_constructor_appends_variables_to_existing_pdt_like_upstream():
@@ -426,34 +426,34 @@ def test_global_simp_hook_matches_upstream_simp_hook_variable():
 
 
 def test_simp_hook_accepts_sympy_wild_pattern_rules_like_upstream_replacement_hooks():
-    eta = tensor("etaSimpHookPattern")
+    η = tensor("etaSimpHookPattern")
     i = sp.Wild("i")
     j = sp.Wild("j")
     previous = tuple(tensor_module.SimpHook)
-    tensor_module.SimpHook[:] = [(Pd(eta(DN(i)), DN(j)), sp.Integer(0))]
+    tensor_module.SimpHook[:] = [(Pd(η(DN(i)), DN(j)), sp.Integer(0))]
 
     try:
-        assert Simp(Pd(eta(DN("a")), DN("b"))) == 0
+        assert Simp(Pd(η(DN("a")), DN("b"))) == 0
     finally:
         tensor_module.SimpHook[:] = previous
 
 
 def test_simp_hook_simplifies_derivative_zero_rules_inside_products_like_upstream():
-    eta = tensor("etaSimpHookProduct")
+    η = tensor("etaSimpHookProduct")
     f = tensor("fSimpHookProduct")
     i = sp.Wild("i")
     j = sp.Wild("j")
     previous = tuple(tensor_module.SimpHook)
-    tensor_module.SimpHook[:] = [(Pd(eta(DN(i)), DN(j)), sp.Integer(0))]
+    tensor_module.SimpHook[:] = [(Pd(η(DN(i)), DN(j)), sp.Integer(0))]
 
     try:
-        assert Simp(f(DN("a")) * Pd(eta(DN("b")), DN("c"))) == 0
+        assert Simp(f(DN("a")) * Pd(η(DN("b")), DN("c"))) == 0
     finally:
         tensor_module.SimpHook[:] = previous
 
 
 def test_callable_simp_hook_simplifies_derivative_zero_rules_inside_products_like_upstream():
-    eta = tensor("etaCallableSimpHookProduct")
+    η = tensor("etaCallableSimpHookProduct")
     f = tensor("fCallableSimpHookProduct")
     previous = tuple(tensor_module.SimpHook)
 
@@ -464,7 +464,7 @@ def test_callable_simp_hook_simplifies_derivative_zero_rules_inside_products_lik
 
     tensor_module.SimpHook[:] = [hook]
     try:
-        assert Simp(f(DN("a")) * Pd(eta(DN("b")), DN("c"))) == 0
+        assert Simp(f(DN("a")) * Pd(η(DN("b")), DN("c"))) == 0
     finally:
         tensor_module.SimpHook[:] = previous
 
@@ -585,11 +585,11 @@ def test_pm2_commutes_with_partial_derivatives_like_upstream_rule():
 
 
 def test_pm2_unsupported_signatures_remain_symbolic_like_mathematica():
-    phi = sp.Symbol("phi_pm2_inert")
+    φ = sp.Symbol("phi_pm2_inert")
     pm2_head = tensor("Pm2")
 
     assert _unsupported_call_as_value(Pm2) == pm2_head()
-    assert Pm2(phi) == pm2_head(phi)
+    assert Pm2(φ) == pm2_head(φ)
 
 
 def test_declare_show_and_delete_tensor_symmetries():
@@ -800,19 +800,19 @@ def test_simp_tensorreduce_canonicalizes_dummy_order_with_one_symmetric_derivati
 
 
 def test_simp_tensorreduce_canonicalizes_multiple_symmetric_direct_factors_with_derivatives():
-    eta = tensor("etaMultiMetricDerivativeCanonical")
+    η = tensor("etaMultiMetricDerivativeCanonical")
     vector = tensor("vectorMultiMetricDerivativeCanonical")
-    DeclareSym(eta, (U1, U1), Symmetric((1, 2)))
+    DeclareSym(η, (U1, U1), Symmetric((1, 2)))
 
     expr = (
-        eta(U1("a"), U1("c"))
-        * eta(U1("b"), U1("d"))
+        η(U1("a"), U1("c"))
+        * η(U1("b"), U1("d"))
         * Pd(vector(D1("a")), D1("b"))
         * Pd(vector(D1("c")), D1("d"))
     )
     relabeled = (
-        eta(U1("a"), U1("d"))
-        * eta(U1("b"), U1("c"))
+        η(U1("a"), U1("d"))
+        * η(U1("b"), U1("c"))
         * Pd(vector(D1("a")), D1("c"))
         * Pd(vector(D1("d")), D1("b"))
     )

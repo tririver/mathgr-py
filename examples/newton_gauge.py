@@ -14,14 +14,14 @@ from mathgr.util import Eps, OO
 a = sp.Symbol("a")
 H = sp.Symbol("H")
 dH = sp.Symbol("dH")
-phi = sp.Symbol("phi")
-psi = sp.Symbol("psi")
-phi0 = sp.Symbol("phi0")
-delta_phi = sp.Symbol("delta_phi")
+φ = sp.Symbol("φ")
+ψ = sp.Symbol("ψ")
+φ0 = sp.Symbol("φ0")
+δφ = sp.Symbol("δφ")
 
 g = tensor("g")
 _h_raw = tensor("hNewtonGauge")
-Sqrtg = a**4 * sp.sqrt((1 + 2 * Eps * phi) * (1 - 2 * Eps * psi) ** 3)
+Sqrtg = a**4 * sp.sqrt((1 + 2 * Eps * φ) * (1 - 2 * Eps * ψ) ** 3)
 _i = sp.Wild("i")
 _j = sp.Wild("j")
 
@@ -30,9 +30,9 @@ def h(first, second):
     first = sp.sympify(first)
     second = sp.sympify(second)
     if _is_index(first, DN) and _is_index(second, DN):
-        return -a**2 * (1 - 2 * Eps * psi) * Dta(first, second)
+        return -a**2 * (1 - 2 * Eps * ψ) * Dta(first, second)
     if _is_index(first, UP) and _is_index(second, UP):
-        return -Dta(DN(first.label), DN(second.label)) / (a**2 * (1 - 2 * Eps * psi))
+        return -Dta(DN(first.label), DN(second.label)) / (a**2 * (1 - 2 * Eps * ψ))
     return _h_raw(first, second)
 
 
@@ -43,11 +43,11 @@ def Simp(expr, **options):
 
 metric_rules = [
     RuleDelayed(g(DN(_i), DN(_j)), lambda i, j: h(DN(i), DN(j))),
-    Rule(g(DE(0), DE(0)), a**2 * (1 + 2 * Eps * phi)),
+    Rule(g(DE(0), DE(0)), a**2 * (1 + 2 * Eps * φ)),
     Rule(g(DE(0), DN(_i)), sp.Integer(0)),
     Rule(g(DN(_i), DE(0)), sp.Integer(0)),
     RuleDelayed(g(UP(_i), UP(_j)), lambda i, j: h(UP(i), UP(j))),
-    Rule(g(UE(0), UE(0)), 1 / (a**2 * (1 + 2 * Eps * phi))),
+    Rule(g(UE(0), UE(0)), 1 / (a**2 * (1 + 2 * Eps * φ))),
     Rule(g(UE(0), UP(_i)), sp.Integer(0)),
     Rule(g(UP(_i), UE(0)), sp.Integer(0)),
 ]
@@ -67,7 +67,7 @@ def DecompG2H(expr):
 
 
 def action_density(*, simplify=True):
-    field = phi0 + Eps * delta_phi
+    field = φ0 + Eps * δφ
     expr = Sqrtg * (DecompG2H(lambda: -R() / 2 - X(field)) - V(field))
     return Simp(expr) if simplify else expr
 
@@ -111,7 +111,7 @@ def _background_simp_hook(expr):
             return expr
         return expr.func(*rewritten_args)
     base, derivative_indices = pdt_parts(expr)
-    if base in {a, H, dH, phi0} and any(_is_index(index, DN) for index in derivative_indices):
+    if base in {a, H, dH, φ0} and any(_is_index(index, DN) for index in derivative_indices):
         return sp.Integer(0)
     if tuple(derivative_indices) == (DE(0),):
         if base == a:

@@ -14,13 +14,13 @@ k = sp.Symbol("k")
 _CONSTANTS.add(k)
 a = sp.Symbol("a")
 H = sp.Symbol("H")
-alpha = sp.Symbol("alpha")
-beta = sp.Symbol("beta")
-zeta = sp.Symbol("zeta")
-epsilon = sp.Symbol("epsilon")
-eta = sp.Symbol("eta")
-eta2 = sp.Symbol("eta2")
-eta3 = sp.Symbol("eta3")
+α = sp.Symbol("α")
+β = sp.Symbol("β")
+ζ = sp.Symbol("ζ")
+ε = sp.Symbol("ε")
+η = sp.Symbol("η")
+η2 = sp.Symbol("η2")
+η3 = sp.Symbol("η3")
 Mp = sp.Symbol("Mp")
 b = tensor("b")
 g = tensor("g")
@@ -29,8 +29,8 @@ _SHIFT_HEAD = tensor("ShiftN")
 _K_HEAD = tensor("K")
 _KK_HEAD = tensor("KK")
 _RADM_HEAD = tensor("RADM")
-LapseN = 1 + Eps * alpha
-Sqrtg = LapseN * sp.exp(3 * Eps * zeta) * a**3
+LapseN = 1 + Eps * α
+Sqrtg = LapseN * sp.exp(3 * Eps * ζ) * a**3
 _DEFAULT_DIM = sp.Symbol("DefaultDim")
 
 
@@ -40,7 +40,7 @@ def ShiftN(*indices):
     index = sp.sympify(indices[0])
     if not _is_frw_shift_index(index):
         return _SHIFT_HEAD(index)
-    return Eps * Pd(beta, index) + Eps * b(index)
+    return Eps * Pd(β, index) + Eps * b(index)
 
 
 def K(*indices):
@@ -110,9 +110,9 @@ def h(first, second):
     second = sp.sympify(second)
     if isinstance(first, Index) and isinstance(second, Index):
         if first.head_name == DN.name and second.head_name == DN.name:
-            return a**2 * sp.exp(2 * Eps * zeta) * Dta(first, second)
+            return a**2 * sp.exp(2 * Eps * ζ) * Dta(first, second)
         if first.head_name == UP.name and second.head_name == UP.name:
-            return sp.exp(-2 * Eps * zeta) * Dta(DN(first.label), DN(second.label)) / a**2
+            return sp.exp(-2 * Eps * ζ) * Dta(DN(first.label), DN(second.label)) / a**2
         if first.head.dual_name == second.head_name:
             return Dta(first, second)
     return _h_raw(first, second)
@@ -183,30 +183,30 @@ def _background_replacement(expr):
         return sp.Integer(0)
     if _is_transverse_shift_derivative(base, derivative_indices):
         return sp.Integer(0)
-    if base in {a, H, epsilon, eta} and any(_is_index(index, DN) for index in derivative_indices):
+    if base in {a, H, ε, η} and any(_is_index(index, DN) for index in derivative_indices):
         return sp.Integer(0)
     if tuple(derivative_indices) == (DE(0),):
         if base == a:
             return a * H
         if base == H:
-            return -epsilon * H**2
-        if base == epsilon:
-            return H * epsilon * eta
-        if base == eta:
-            return H * eta2 * eta
-        if base == eta2:
-            return H * eta3 * eta2
+            return -ε * H**2
+        if base == ε:
+            return H * ε * η
+        if base == η:
+            return H * η2 * η
+        if base == η2:
+            return H * η3 * η2
     if tuple(derivative_indices) == (DE(0), DE(0)):
         if base == a:
-            return a * H**2 - a * H**2 * epsilon
+            return a * H**2 - a * H**2 * ε
         if base == H:
-            return 2 * H**3 * epsilon**2 - H**3 * epsilon * eta
+            return 2 * H**3 * ε**2 - H**3 * ε * η
     if tuple(derivative_indices) == (DE(0), DE(0), DE(0)) and base == H:
         return (
-            -6 * H**4 * epsilon**3
-            + 7 * H**4 * epsilon**2 * eta
-            - H**4 * epsilon * eta**2
-            - H**4 * epsilon * eta * eta2
+            -6 * H**4 * ε**3
+            + 7 * H**4 * ε**2 * η
+            - H**4 * ε * η**2
+            - H**4 * ε * η * η2
         )
     return None
 

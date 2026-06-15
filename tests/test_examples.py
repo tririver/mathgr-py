@@ -84,22 +84,22 @@ def test_newton_gauge_example_ports_initial_metric_setup_cells():
     results = newton_gauge.main()
 
     assert results["sqrtg"] == newton_gauge.a**4 * sp.sqrt(
-        (1 + 2 * Eps * newton_gauge.phi) * (1 - 2 * Eps * newton_gauge.psi) ** 3
+        (1 + 2 * Eps * newton_gauge.φ) * (1 - 2 * Eps * newton_gauge.ψ) ** 3
     )
     assert results["spatial_metric_down"] == (
-        -newton_gauge.a**2 * (1 - 2 * Eps * newton_gauge.psi) * Dta(DN("i"), DN("j"))
+        -newton_gauge.a**2 * (1 - 2 * Eps * newton_gauge.ψ) * Dta(DN("i"), DN("j"))
     )
     assert results["spatial_metric_up"] == (
-        -Dta(DN("i"), DN("j")) / (newton_gauge.a**2 * (1 - 2 * Eps * newton_gauge.psi))
+        -Dta(DN("i"), DN("j")) / (newton_gauge.a**2 * (1 - 2 * Eps * newton_gauge.ψ))
     )
-    assert results["metric_00"] == newton_gauge.a**2 * (1 + 2 * Eps * newton_gauge.phi)
+    assert results["metric_00"] == newton_gauge.a**2 * (1 + 2 * Eps * newton_gauge.φ)
     assert results["metric_0i"] == 0
-    assert results["inverse_metric_00"] == 1 / (newton_gauge.a**2 * (1 + 2 * Eps * newton_gauge.phi))
+    assert results["inverse_metric_00"] == 1 / (newton_gauge.a**2 * (1 + 2 * Eps * newton_gauge.φ))
     assert results["inverse_metric_0i"] == 0
     assert results["background_time_derivative"] == newton_gauge.a * newton_gauge.H
     assert results["background_second_time_derivative"] == newton_gauge.a * newton_gauge.H**2 + newton_gauge.a * newton_gauge.dH
     assert results["background_spatial_derivative"] == 0
-    assert newton_gauge.Simp(Pd(newton_gauge.phi0, DN("i"))) == 0
+    assert newton_gauge.Simp(Pd(newton_gauge.φ0, DN("i"))) == 0
     assert newton_gauge.Simp(PdT(newton_gauge.a, PdVars(DN("i")))) == 0
 
 
@@ -109,7 +109,7 @@ def test_newton_gauge_metric_decomposition_uses_rule_table():
 
     assert len(newton_gauge.metric_rules) == 8
     assert newton_gauge.decomp_hook(newton_gauge.g(DN("i"), DN("j"))) == (
-        -newton_gauge.a**2 * (1 - 2 * Eps * newton_gauge.psi) * newton_gauge.Dta(DN("i"), DN("j"))
+        -newton_gauge.a**2 * (1 - 2 * Eps * newton_gauge.ψ) * newton_gauge.Dta(DN("i"), DN("j"))
     )
     assert newton_gauge.decomp_hook(newton_gauge.g(DE(0), DN("i"))) == 0
     assert newton_gauge.decomp_hook(newton_gauge.g(UE(0), UP("i"))) == 0
@@ -121,15 +121,15 @@ def test_newton_gauge_example_ports_local_decompg2h_and_action_cell():
     from mathgr.tensor import Pd
     from mathgr.util import Eps
 
-    field = newton_gauge.phi0 + Eps * newton_gauge.delta_phi
+    field = newton_gauge.φ0 + Eps * newton_gauge.δφ
     decomposed_kinetic = newton_gauge.DecompG2H(lambda: X(field))
     results = newton_gauge.main(compute_action=False)
 
     assert not decomposed_kinetic.has(DTot("a"), UTot("a"))
-    assert decomposed_kinetic.has(Pd(newton_gauge.delta_phi, DE(0)))
-    assert decomposed_kinetic.has(Pd(newton_gauge.phi0, DE(0)))
-    assert decomposed_kinetic.has(Pd(newton_gauge.delta_phi, DN("a")))
-    assert not decomposed_kinetic.has(Pd(newton_gauge.phi0, DN("a")))
+    assert decomposed_kinetic.has(Pd(newton_gauge.δφ, DE(0)))
+    assert decomposed_kinetic.has(Pd(newton_gauge.φ0, DE(0)))
+    assert decomposed_kinetic.has(Pd(newton_gauge.δφ, DN("a")))
+    assert not decomposed_kinetic.has(Pd(newton_gauge.φ0, DN("a")))
     assert results["action_density"].has(V(field))
     assert results["action_density"].has(newton_gauge.Sqrtg)
     assert not results["action_density"].has(DTot("a"), UTot("a"))
@@ -142,30 +142,30 @@ def test_newton_gauge_example_ports_background_and_linear_action_cells():
     from mathgr.tensor import Pd
 
     results = newton_gauge.main(compute_action=True)
-    phi0_dot = Pd(newton_gauge.phi0, DE(0))
+    φ0dot = Pd(newton_gauge.φ0, DE(0))
 
     expected_s0 = (
         3 * newton_gauge.a**2 * newton_gauge.dH
         + 3 * newton_gauge.a**2 * newton_gauge.H**2
-        + newton_gauge.a**2 * phi0_dot**2 / 2
-        - newton_gauge.a**4 * V(newton_gauge.phi0)
+        + newton_gauge.a**2 * φ0dot**2 / 2
+        - newton_gauge.a**4 * V(newton_gauge.φ0)
     )
     expected_s1 = (
-        -3 * newton_gauge.a**2 * newton_gauge.dH * newton_gauge.phi
-        - 3 * newton_gauge.a**2 * newton_gauge.H**2 * newton_gauge.phi
-        - 9 * newton_gauge.a**2 * newton_gauge.dH * newton_gauge.psi
-        - 9 * newton_gauge.a**2 * newton_gauge.H**2 * newton_gauge.psi
-        - 3 * newton_gauge.a**2 * newton_gauge.H * Pd(newton_gauge.phi, DE(0))
-        - newton_gauge.a**2 * Pd(Pd(newton_gauge.phi, DN("a")), DN("a"))
-        + newton_gauge.a**2 * Pd(newton_gauge.delta_phi, DE(0)) * phi0_dot
-        - newton_gauge.a**2 * newton_gauge.phi * phi0_dot**2 / 2
-        - 3 * newton_gauge.a**2 * newton_gauge.psi * phi0_dot**2 / 2
-        - 9 * newton_gauge.a**2 * newton_gauge.H * Pd(newton_gauge.psi, DE(0))
-        - 3 * newton_gauge.a**2 * Pd(Pd(newton_gauge.psi, DE(0)), DE(0))
-        + 2 * newton_gauge.a**2 * Pd(Pd(newton_gauge.psi, DN("a")), DN("a"))
-        - newton_gauge.a**4 * newton_gauge.delta_phi * sp.diff(V(newton_gauge.phi0), newton_gauge.phi0)
-        - newton_gauge.a**4 * newton_gauge.phi * V(newton_gauge.phi0)
-        + 3 * newton_gauge.a**4 * newton_gauge.psi * V(newton_gauge.phi0)
+        -3 * newton_gauge.a**2 * newton_gauge.dH * newton_gauge.φ
+        - 3 * newton_gauge.a**2 * newton_gauge.H**2 * newton_gauge.φ
+        - 9 * newton_gauge.a**2 * newton_gauge.dH * newton_gauge.ψ
+        - 9 * newton_gauge.a**2 * newton_gauge.H**2 * newton_gauge.ψ
+        - 3 * newton_gauge.a**2 * newton_gauge.H * Pd(newton_gauge.φ, DE(0))
+        - newton_gauge.a**2 * Pd(Pd(newton_gauge.φ, DN("a")), DN("a"))
+        + newton_gauge.a**2 * Pd(newton_gauge.δφ, DE(0)) * φ0dot
+        - newton_gauge.a**2 * newton_gauge.φ * φ0dot**2 / 2
+        - 3 * newton_gauge.a**2 * newton_gauge.ψ * φ0dot**2 / 2
+        - 9 * newton_gauge.a**2 * newton_gauge.H * Pd(newton_gauge.ψ, DE(0))
+        - 3 * newton_gauge.a**2 * Pd(Pd(newton_gauge.ψ, DE(0)), DE(0))
+        + 2 * newton_gauge.a**2 * Pd(Pd(newton_gauge.ψ, DN("a")), DN("a"))
+        - newton_gauge.a**4 * newton_gauge.δφ * sp.diff(V(newton_gauge.φ0), newton_gauge.φ0)
+        - newton_gauge.a**4 * newton_gauge.φ * V(newton_gauge.φ0)
+        + 3 * newton_gauge.a**4 * newton_gauge.ψ * V(newton_gauge.φ0)
     )
 
     assert newton_gauge.Simp(results["s0"] - expected_s0) == 0
@@ -191,19 +191,19 @@ def test_newton_gauge_example_ports_displayed_quadratic_action_cell():
 
     results = newton_gauge.main(compute_action=True)
     s2 = sp.expand(results["s2"])
-    phi0_dot = Pd(newton_gauge.phi0, DE(0))
+    φ0dot = Pd(newton_gauge.φ0, DE(0))
     expected_terms = [
-        9 * newton_gauge.a**2 * newton_gauge.dH * newton_gauge.phi**2 / 2,
-        9 * newton_gauge.a**2 * newton_gauge.H**2 * newton_gauge.phi**2 / 2,
-        9 * newton_gauge.a**2 * newton_gauge.dH * newton_gauge.phi * newton_gauge.psi,
-        newton_gauge.a**2 * Pd(newton_gauge.delta_phi, DE(0)) ** 2 / 2,
-        -newton_gauge.a**2 * Pd(newton_gauge.delta_phi, DN("a")) ** 2 / 2,
+        9 * newton_gauge.a**2 * newton_gauge.dH * newton_gauge.φ**2 / 2,
+        9 * newton_gauge.a**2 * newton_gauge.H**2 * newton_gauge.φ**2 / 2,
+        9 * newton_gauge.a**2 * newton_gauge.dH * newton_gauge.φ * newton_gauge.ψ,
+        newton_gauge.a**2 * Pd(newton_gauge.δφ, DE(0)) ** 2 / 2,
+        -newton_gauge.a**2 * Pd(newton_gauge.δφ, DN("a")) ** 2 / 2,
         -newton_gauge.a**4
-        * newton_gauge.delta_phi
-        * newton_gauge.phi
-        * sp.diff(V(newton_gauge.phi0), newton_gauge.phi0),
-        3 * newton_gauge.a**4 * newton_gauge.phi * newton_gauge.psi * V(newton_gauge.phi0),
-        3 * newton_gauge.a**2 * newton_gauge.phi * newton_gauge.psi * phi0_dot**2 / 2,
+        * newton_gauge.δφ
+        * newton_gauge.φ
+        * sp.diff(V(newton_gauge.φ0), newton_gauge.φ0),
+        3 * newton_gauge.a**4 * newton_gauge.φ * newton_gauge.ψ * V(newton_gauge.φ0),
+        3 * newton_gauge.a**2 * newton_gauge.φ * newton_gauge.ψ * φ0dot**2 / 2,
     ]
 
     assert newton_gauge.Simp(s2 - newton_gauge.action_order(2)) == 0
@@ -223,27 +223,27 @@ def test_second_order_gw_pert_example_ports_metric_setup_cells():
     assert results["shift"] == 0
     assert results["spatial_metric_down"] == second_order_gw_pert.a**2 * (
         Dta(DN("i"), DN("j"))
-        + Eps * second_order_gw_pert.gamma(DN("i"), DN("j"))
+        + Eps * second_order_gw_pert.γ(DN("i"), DN("j"))
         + Eps**2
-        * second_order_gw_pert.gamma(DN("i"), dummy)
-        * second_order_gw_pert.gamma(dummy, DN("j"))
+        * second_order_gw_pert.γ(DN("i"), dummy)
+        * second_order_gw_pert.γ(dummy, DN("j"))
         / 2
     )
     assert results["spatial_metric_up"] == (
         Dta(DN("i"), DN("j"))
-        - Eps * second_order_gw_pert.gamma(DN("i"), DN("j"))
+        - Eps * second_order_gw_pert.γ(DN("i"), DN("j"))
         + Eps**2
-        * second_order_gw_pert.gamma(DN("i"), dummy)
-        * second_order_gw_pert.gamma(dummy, DN("j"))
+        * second_order_gw_pert.γ(DN("i"), dummy)
+        * second_order_gw_pert.γ(dummy, DN("j"))
         / 2
     ) / second_order_gw_pert.a**2
-    assert second_order_gw_pert.gamma(DN("i"), DN("i")) == 0
+    assert second_order_gw_pert.γ(DN("i"), DN("i")) == 0
     assert second_order_gw_pert.Simp(second_order_gw_pert._gamma_raw(DN("i"), DN("i"))) == 0
     assert second_order_gw_pert.Simp(
         PdT(second_order_gw_pert._gamma_raw(DN("i"), DN("i")), PdVars(DE(0)))
     ) == 0
     assert second_order_gw_pert.Simp(
-        PdT(second_order_gw_pert.gamma(DN("i"), DN("j")), PdVars(DN("i")))
+        PdT(second_order_gw_pert.γ(DN("i"), DN("j")), PdVars(DN("i")))
     ) == 0
     assert results["metric_00"] == -1
     assert results["metric_0i"] == 0
@@ -260,11 +260,11 @@ def test_second_order_gw_pert_example_ports_final_quadratic_action_cell():
     expected = (
         second_order_gw_pert.Mp**2
         * second_order_gw_pert.a**3
-        * Pd(second_order_gw_pert.gamma(DN("a"), DN("b")), DE(0)) ** 2
+        * Pd(second_order_gw_pert.γ(DN("a"), DN("b")), DE(0)) ** 2
         / 8
         - second_order_gw_pert.Mp**2
         * second_order_gw_pert.a
-        * Pd(second_order_gw_pert.gamma(DN("a"), DN("b")), DN("c")) ** 2
+        * Pd(second_order_gw_pert.γ(DN("a"), DN("b")), DN("c")) ** 2
         / 8
     )
 
@@ -279,13 +279,13 @@ def test_second_order_pert_example_ports_zeta_gauge_action_setup_cells():
 
     results = second_order_pert.main(compute_action=False)
 
-    assert results["gauge"] == "zeta"
+    assert results["gauge"] == "ζ"
     assert results["sqrtg"] == Sqrtg
     assert results["lapse"] == LapseN
     assert results["shift"] == ShiftN(DN("i"))
-    assert second_order_pert.Simp(Pd(second_order_pert.phi, DN("i"))) == 0
-    assert second_order_pert.Simp(PdT(second_order_pert.phi, PdVars(DN("i"), DE(0)))) == 0
-    assert results["action_density"].has(second_order_pert.phi)
+    assert second_order_pert.Simp(Pd(second_order_pert.φ, DN("i"))) == 0
+    assert second_order_pert.Simp(PdT(second_order_pert.φ, PdVars(DN("i"), DE(0)))) == 0
+    assert results["action_density"].has(second_order_pert.φ)
     assert not results["action_density"].has(gr_module.LapseN)
     assert not any(tensor_head_name(node) == "ShiftN" for node in sp.preorder_traversal(results["action_density"]))
 
@@ -313,8 +313,8 @@ def test_second_order_pert_example_ports_final_zeta_gauge_action_cell():
     from mathgr.tensor import Pd
 
     expected = (
-        -second_order_pert.a * second_order_pert.k**2 * second_order_pert.epsilon * second_order_pert.zeta**2
-        + second_order_pert.a**3 * second_order_pert.epsilon * Pd(second_order_pert.zeta, DE(0)) ** 2
+        -second_order_pert.a * second_order_pert.k**2 * second_order_pert.ε * second_order_pert.ζ**2
+        + second_order_pert.a**3 * second_order_pert.ε * Pd(second_order_pert.ζ, DE(0)) ** 2
     )
 
     assert second_order_pert.Simp(second_order_pert.second_order_action() - expected) == 0
@@ -327,14 +327,14 @@ def test_second_order_pert_deltaphi_gauge_example_ports_initial_cells():
 
     results = second_order_pert_deltaphi_gauge.main(compute_action=False)
 
-    assert results["gauge"] == "delta_phi"
-    assert results["phi"] == second_order_pert_deltaphi_gauge.phi0 + Eps * second_order_pert_deltaphi_gauge.varphi
-    assert results["zeta"] == 0
-    assert second_order_pert_deltaphi_gauge.Simp(Pd(second_order_pert_deltaphi_gauge.phi0, DN("i"))) == 0
+    assert results["gauge"] == "δφ"
+    assert results["φ"] == second_order_pert_deltaphi_gauge.φ0 + Eps * second_order_pert_deltaphi_gauge.δφ
+    assert results["ζ"] == 0
+    assert second_order_pert_deltaphi_gauge.Simp(Pd(second_order_pert_deltaphi_gauge.φ0, DN("i"))) == 0
     assert second_order_pert_deltaphi_gauge.Simp(
-        PdT(second_order_pert_deltaphi_gauge.phi0, PdVars(DN("i"), DE(0)))
+        PdT(second_order_pert_deltaphi_gauge.φ0, PdVars(DN("i"), DE(0)))
     ) == 0
-    assert not results["action_density"].has(second_order_pert_deltaphi_gauge.zeta)
+    assert not results["action_density"].has(second_order_pert_deltaphi_gauge.ζ)
 
 
 def test_third_order_pert_examples_port_zeta_gauge_action_setup_cells():
@@ -346,13 +346,13 @@ def test_third_order_pert_examples_port_zeta_gauge_action_setup_cells():
     results = third_order_pert.main(compute_orders=False)
     pm2_results = third_order_pert_pm2.main(compute_orders=False)
 
-    assert results["gauge"] == "zeta"
+    assert results["gauge"] == "ζ"
     assert results["sqrtg"] == Sqrtg
-    assert results["action_density"].has(third_order_pert.phi)
+    assert results["action_density"].has(third_order_pert.φ)
     assert results["order_operator"](1 + 2 * Eps + 3 * Eps**2 + 4 * Eps**3) == 4
-    assert pm2_results["gauge"] == "zeta"
+    assert pm2_results["gauge"] == "ζ"
     assert pm2_results["uses_pm2_constraints"] is True
-    assert pm2_results["action_density"].has(third_order_pert_pm2.phi)
+    assert pm2_results["action_density"].has(third_order_pert_pm2.φ)
     assert pm2_results["order_operator"](1 + 2 * Eps + 3 * Eps**2 + 4 * Eps**3) == 4
 
 
@@ -365,63 +365,63 @@ def test_gauge_transform_example_ports_initial_helpers():
     dummy = DN("a")
 
     assert results["default_dim"] == 3
-    assert gauge_trans_df_to_zeta.Simp(Pd(gauge_trans_df_to_zeta.phi0, DN("i"))) == 0
+    assert gauge_trans_df_to_zeta.Simp(Pd(gauge_trans_df_to_zeta.φ0, DN("i"))) == 0
     assert gauge_trans_df_to_zeta.Simp(Pd(gauge_trans_df_to_zeta.a, DN("i"))) == 0
     assert gauge_trans_df_to_zeta.Simp(Pd(gauge_trans_df_to_zeta.H, DE(0))) == (
-        -gauge_trans_df_to_zeta.epsilon * gauge_trans_df_to_zeta.H**2
+        -gauge_trans_df_to_zeta.ε * gauge_trans_df_to_zeta.H**2
     )
     assert results["expanded_a"] == sp.expand(
         gauge_trans_df_to_zeta.a
-        + Eps * gauge_trans_df_to_zeta.a * gauge_trans_df_to_zeta.H * gauge_trans_df_to_zeta.delta_t
+        + Eps * gauge_trans_df_to_zeta.a * gauge_trans_df_to_zeta.H * gauge_trans_df_to_zeta.δt
         + Eps**2
-        * (gauge_trans_df_to_zeta.a * gauge_trans_df_to_zeta.H**2 - gauge_trans_df_to_zeta.a * gauge_trans_df_to_zeta.H**2 * gauge_trans_df_to_zeta.epsilon)
-        * gauge_trans_df_to_zeta.delta_t**2
+        * (gauge_trans_df_to_zeta.a * gauge_trans_df_to_zeta.H**2 - gauge_trans_df_to_zeta.a * gauge_trans_df_to_zeta.H**2 * gauge_trans_df_to_zeta.ε)
+        * gauge_trans_df_to_zeta.δt**2
         / 2
     )
-    assert results["expanded_field"].has(gauge_trans_df_to_zeta.delta_x(dummy))
-    assert results["expanded_field"].has(Pd(gauge_trans_df_to_zeta.varphi, dummy))
-    assert results["collected"](1 + Eps * gauge_trans_df_to_zeta.varphi + Eps * gauge_trans_df_to_zeta.phi0) == (
-        1 + Eps * (gauge_trans_df_to_zeta.phi0 + gauge_trans_df_to_zeta.varphi)
+    assert results["expanded_field"].has(gauge_trans_df_to_zeta.δx(dummy))
+    assert results["expanded_field"].has(Pd(gauge_trans_df_to_zeta.δφ, dummy))
+    assert results["collected"](1 + Eps * gauge_trans_df_to_zeta.δφ + Eps * gauge_trans_df_to_zeta.φ0) == (
+        1 + Eps * (gauge_trans_df_to_zeta.φ0 + gauge_trans_df_to_zeta.δφ)
     )
 
 
 def test_zeta_gauge_action_from_delta_phi_example_ports_setup_and_constraints():
     from examples import zeta_gauge_action_from_delta_phi
-    from mathgr.frwadm import alpha, b, beta, zeta
+    from mathgr.frwadm import α, b, β, ζ
     from mathgr.tensor import Pd, PdT, PdVars
     from mathgr.util import Eps
 
     results = zeta_gauge_action_from_delta_phi.main(compute_action=False)
     constraints = results["constraints"]
 
-    assert results["phi"] == zeta_gauge_action_from_delta_phi.phi0 + Eps * zeta_gauge_action_from_delta_phi.varphi
-    assert results["zeta"] == 0
-    assert zeta_gauge_action_from_delta_phi.Simp(Pd(zeta_gauge_action_from_delta_phi.phi0, DN("i"))) == 0
+    assert results["φ"] == zeta_gauge_action_from_delta_phi.φ0 + Eps * zeta_gauge_action_from_delta_phi.δφ
+    assert results["ζ"] == 0
+    assert zeta_gauge_action_from_delta_phi.Simp(Pd(zeta_gauge_action_from_delta_phi.φ0, DN("i"))) == 0
     assert zeta_gauge_action_from_delta_phi.Simp(
-        PdT(zeta_gauge_action_from_delta_phi.phi0, PdVars(DN("i"), DE(0)))
+        PdT(zeta_gauge_action_from_delta_phi.φ0, PdVars(DN("i"), DE(0)))
     ) == 0
-    assert constraints[alpha].has(zeta_gauge_action_from_delta_phi.varphi)
-    assert constraints[beta].has(zeta_gauge_action_from_delta_phi.varphi)
+    assert constraints[α].has(zeta_gauge_action_from_delta_phi.δφ)
+    assert constraints[β].has(zeta_gauge_action_from_delta_phi.δφ)
     assert constraints[b(DN("a"))] == 0
-    assert not results["action_density"].has(zeta)
+    assert not results["action_density"].has(ζ)
 
 
 def test_zeta_gauge_action_from_delta_phi_example_ports_selected_cubic_tex_cell():
     from examples import zeta_gauge_action_from_delta_phi
-    from mathgr.frwadm import a, epsilon
+    from mathgr.frwadm import a, ε
     from mathgr.tensor import Pd, Pm2
 
     results = zeta_gauge_action_from_delta_phi.main(compute_action=False)
-    zeta_n = zeta_gauge_action_from_delta_phi.zeta_n
+    ζn = zeta_gauge_action_from_delta_phi.ζn
     expected = (
         -2
         * a**3
-        * epsilon**2
-        * Pd(Pd(Pm2(zeta_n, DN), DE(0)), DN("a"))
-        * Pd(zeta_n, DE(0))
-        * Pd(zeta_n, DN("a"))
-        + a**3 * epsilon**2 * zeta_n * Pd(zeta_n, DE(0)) ** 2
-        + a * epsilon**2 * zeta_n * Pd(zeta_n, DN("a")) ** 2
+        * ε**2
+        * Pd(Pd(Pm2(ζn, DN), DE(0)), DN("a"))
+        * Pd(ζn, DE(0))
+        * Pd(ζn, DN("a"))
+        + a**3 * ε**2 * ζn * Pd(ζn, DE(0)) ** 2
+        + a * ε**2 * ζn * Pd(ζn, DN("a")) ** 2
     )
 
     assert results["s3_select"] == expected
@@ -429,7 +429,7 @@ def test_zeta_gauge_action_from_delta_phi_example_ports_selected_cubic_tex_cell(
     assert results["s3_select_tex"].startswith("%Generated by MathGR/typeset.m, ")
     assert "\\begin{dmath}" in results["s3_select_tex"]
     assert "\\partial^{-2}" in results["s3_select_tex"]
-    assert "\\zeta_{n}" in results["s3_select_tex"]
+    assert "ζn" in results["s3_select_tex"]
     assert "\n + \n -" not in results["s3_select_tex"]
     assert "_PdT" not in results["s3_select_tex"]
 
@@ -438,29 +438,29 @@ def test_equilateral_example_ports_initial_kinetic_expansion_cells():
     from examples import equilateral
 
     results = equilateral.main()
-    delta = equilateral.delta_phi(equilateral.x, equilateral.y, equilateral.z, equilateral.tau)
+    delta = equilateral.δφ(equilateral.x, equilateral.y, equilateral.z, equilateral.τ)
 
     assert results["x_expand_1"] == (
-        sp.diff(equilateral.phi0(equilateral.tau), equilateral.tau)
-        * sp.diff(delta, equilateral.tau)
-        / equilateral.a(equilateral.tau) ** 2
+        sp.diff(equilateral.φ0(equilateral.τ), equilateral.τ)
+        * sp.diff(delta, equilateral.τ)
+        / equilateral.a(equilateral.τ) ** 2
     )
     assert results["x_expand_2"] == (
-        sp.diff(delta, equilateral.tau) ** 2
+        sp.diff(delta, equilateral.τ) ** 2
         - sp.diff(delta, equilateral.x) ** 2
         - sp.diff(delta, equilateral.y) ** 2
         - sp.diff(delta, equilateral.z) ** 2
-    ) / (2 * equilateral.a(equilateral.tau) ** 2)
+    ) / (2 * equilateral.a(equilateral.τ) ** 2)
     assert results["lag_3"] == (
-        equilateral.a(equilateral.tau) ** 4
-        * equilateral.delta_X1
-        * (equilateral.PXXX * equilateral.delta_X1**2 + 6 * equilateral.PXX * equilateral.delta_X2)
+        equilateral.a(equilateral.τ) ** 4
+        * equilateral.δX1
+        * (equilateral.PXXX * equilateral.δX1**2 + 6 * equilateral.PXX * equilateral.δX2)
         / 6
     )
-    assert results["lag_0"] == equilateral.a(equilateral.tau) ** 4 * equilateral.P
-    assert results["lag_1"] == equilateral.a(equilateral.tau) ** 4 * equilateral.PX * equilateral.delta_X1
-    assert results["lag_2"] == equilateral.a(equilateral.tau) ** 4 * (
-        equilateral.PX * equilateral.delta_X2 + equilateral.PXX * equilateral.delta_X1**2 / 2
+    assert results["lag_0"] == equilateral.a(equilateral.τ) ** 4 * equilateral.P
+    assert results["lag_1"] == equilateral.a(equilateral.τ) ** 4 * equilateral.PX * equilateral.δX1
+    assert results["lag_2"] == equilateral.a(equilateral.τ) ** 4 * (
+        equilateral.PX * equilateral.δX2 + equilateral.PXX * equilateral.δX1**2 / 2
     )
 
 
@@ -468,32 +468,32 @@ def test_equilateral_example_ports_third_order_delta_phi_and_zeta_cells():
     from examples import equilateral
 
     results = equilateral.main()
-    delta = equilateral.delta_phi(equilateral.x, equilateral.y, equilateral.z, equilateral.tau)
-    delta_t = sp.diff(delta, equilateral.tau)
+    delta = equilateral.δφ(equilateral.x, equilateral.y, equilateral.z, equilateral.τ)
+    δt = sp.diff(delta, equilateral.τ)
     delta_grad_sq = sum(sp.diff(delta, coord) ** 2 for coord in (equilateral.x, equilateral.y, equilateral.z))
     expected_delta_phi = (
-        equilateral.a(equilateral.tau)
-        * equilateral.phi0_dot
+        equilateral.a(equilateral.τ)
+        * equilateral.φ0dot
         * (
             equilateral.PX**2
-            * equilateral.lambda_
-            * delta_t**3
-            / (2 * equilateral.cs**4 * equilateral.Sigma**2)
+            * equilateral.λ
+            * δt**3
+            / (2 * equilateral.cs**4 * equilateral.Σ**2)
             + equilateral.PX**2
             * (equilateral.cs**2 - 1)
-            * delta_t
+            * δt
             * delta_grad_sq
-            / (4 * equilateral.cs**4 * equilateral.Sigma)
+            / (4 * equilateral.cs**4 * equilateral.Σ)
         )
     )
 
-    zeta_field = equilateral.zeta_field(equilateral.x, equilateral.y, equilateral.z, equilateral.tau)
-    zeta_t = sp.diff(zeta_field, equilateral.tau)
-    zeta_grad_sq = sum(sp.diff(zeta_field, coord) ** 2 for coord in (equilateral.x, equilateral.y, equilateral.z))
+    ζfield = equilateral.ζfield(equilateral.x, equilateral.y, equilateral.z, equilateral.τ)
+    zeta_t = sp.diff(ζfield, equilateral.τ)
+    zeta_grad_sq = sum(sp.diff(ζfield, coord) ** 2 for coord in (equilateral.x, equilateral.y, equilateral.z))
     expected_zeta = (
-        -2 * equilateral.lambda_ * equilateral.a(equilateral.tau) * zeta_t**3 / equilateral.H**3
-        + equilateral.Sigma
-        * equilateral.a(equilateral.tau)
+        -2 * equilateral.λ * equilateral.a(equilateral.τ) * zeta_t**3 / equilateral.H**3
+        + equilateral.Σ
+        * equilateral.a(equilateral.τ)
         * (1 - equilateral.cs**2)
         * zeta_t
         * zeta_grad_sq

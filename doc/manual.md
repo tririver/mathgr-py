@@ -4,6 +4,11 @@
 general relativity, ADM and FRW decompositions, perturbation series,
 integration by parts, and TeX export.
 
+MathGR-Py defaults to UTF-8 Greek names for common physics scalars. Use `φ`,
+`δφ`, `φ0`, `ζ`, `ε`, `η`, `α`, and `β` directly in Python and MCP
+expressions. Index constructors stay ASCII (`UP`, `DN`, `U1`, `D1`, ...), and
+their labels may be UTF-8, for example `D1("α")`.
+
 This manual describes the Python API exposed by the package. It assumes:
 
 ```python
@@ -576,12 +581,12 @@ symbolic or raise only where the implementation needs a metric operation.
 ### Scalar Field Helpers
 
 ```python
-phi = sp.Symbol("phi")
+φ = sp.Symbol("φ")
 
-X(phi)                 # kinetic term
-Dsquare(phi)           # box operator
-T(phi)(DN("a"), DN("b"))  # stress tensor
-V(phi)                 # potential head
+X(φ)                 # kinetic term
+Dsquare(φ)           # box operator
+T(φ)(DN("a"), DN("b"))  # stress tensor
+V(φ)                 # potential head
 ```
 
 ### Generic ADM Helpers In `mathgr.gr`
@@ -736,13 +741,13 @@ Symbols and tensor heads:
 frw.k
 frw.a
 frw.H
-frw.alpha
-frw.beta
-frw.zeta
-frw.epsilon
-frw.eta
-frw.eta2
-frw.eta3
+frw.α
+frw.β
+frw.ζ
+frw.ε
+frw.η
+frw.η2
+frw.η3
 frw.Mp
 frw.b
 frw.g
@@ -751,15 +756,15 @@ frw.g
 Lapse and determinant:
 
 ```python
-frw.LapseN   # 1 + Eps*alpha
-frw.Sqrtg    # LapseN*exp(3*Eps*zeta)*a**3
+frw.LapseN   # 1 + Eps*α
+frw.Sqrtg    # LapseN*exp(3*Eps*ζ)*a**3
 ```
 
 Shift:
 
 ```python
 frw.ShiftN(DN("i"))
-# Eps*Pd(beta, DN("i")) + Eps*b(DN("i"))
+# Eps*Pd(β, DN("i")) + Eps*b(DN("i"))
 ```
 
 Spatial metric:
@@ -783,7 +788,7 @@ Unsupported signatures remain symbolic.
 FRW four-to-three split:
 
 ```python
-frw.DecompG2H(lambda: X(phi))
+frw.DecompG2H(lambda: X(φ))
 ```
 
 FRW simplifier:
@@ -794,8 +799,8 @@ frw.Simp(expr)
 
 Rules include:
 
-- background spatial derivatives of `a`, `H`, `epsilon`, and `eta` vanish
-- time derivatives of `a`, `H`, `epsilon`, `eta`, and higher slow-roll symbols
+- background spatial derivatives of `a`, `H`, `ε`, and `η` vanish
+- time derivatives of `a`, `H`, `ε`, `η`, and higher slow-roll symbols
   use the module rules
 - `DefaultDim -> 3`
 - `Mp` derivative vanishes
@@ -1054,7 +1059,8 @@ debugging escape hatches when `mathgr_compute` cannot express the workflow.
 Example:
 
 ```text
-mathgr_compute("Simp(Dta(U('a'), D('b')) * f(U('b')))")
+mathgr_compute("Simp(Dta(U('α'), D('β')) * f(U('β')))")
+mathgr_compute("Pd(δφ, D1('α'))")
 ```
 
 Auto declarations:
@@ -1083,15 +1089,15 @@ Dimension override:
   and index families. Put ordinary MathGR calls directly in the expression:
 
 ```python
-Simp(Dta(U('a'), D('b')) * f(U('b')))
+Simp(Dta(U('α'), D('β')) * f(U('β')))
 Simp(lhs - rhs)
 Decomp0i(f(DTot('a')) * f(UTot('a')))
 Ibp(y * Pd(x, D('i')))
 OO(2)((1 + Eps*x)**3)
 ```
 
-If `context` is omitted, the server uses and auto-creates `"default"`.
-Assignments in a compute block persist in that context:
+For normal multi-step calculations, omit `context` and use the default context.
+Assignments in a compute block persist there:
 
 ```python
 mathgr_compute("""
@@ -1106,7 +1112,9 @@ mathgr_context_get()
 `result = ...` controls the returned value but is not persisted as context
 state. Use a regular assignment, or `store_as`, for durable values.
 
-Named contexts are auto-created on first use:
+Named contexts are auto-created on first use, but they are intended for explicit
+forks only, such as preserving two incompatible calculation branches. Do not
+create new contexts for ordinary retries or probes:
 
 ```python
 mathgr_compute(
@@ -1153,7 +1161,8 @@ that name a SymPy symbol for the call/context.
 
 : Lists stored declarations and expression source strings. With `name`, returns
   the stored source definition for that name only. It does not evaluate values;
-  use `mathgr_compute("name", context=...)` for that.
+  use `mathgr_compute("name")` for the default context, or pass `context` only
+  when reading a named branch.
 
 `mathgr_context_clear(context="default")`
 
@@ -1229,7 +1238,7 @@ See the repository `README.md` for Codex and Claude Code installation recipes.
 
 `examples/second_order_pert.py`
 
-: FRW ADM second-order action density in zeta gauge.
+: FRW ADM second-order action density in ζ gauge.
 
 `examples/third_order_pert.py`
 
@@ -1333,7 +1342,7 @@ FRW ADM root aliases:
 
 ```text
 H DecompG2H Fourier2 FRWK FRWKK FRWRADM Mp Sqrtg FRWShiftN FRWLapseN
-a alpha b beta epsilon eta eta2 eta3 h zeta
+a α b β ε η η2 η3 h ζ
 ```
 
 TeX:

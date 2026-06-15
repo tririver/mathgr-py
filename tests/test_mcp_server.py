@@ -140,6 +140,15 @@ def test_compute_mathgr_uses_auto_declarations_and_explicit_simp_call():
     assert trace["result"] == "Dim"
 
 
+def test_compute_mathgr_accepts_utf8_scalar_names_and_index_labels():
+    result = compute_mathgr("Pd(δφ, D1('α'))", output=["str", "tex", "diagnostics"])
+
+    assert result["ok"] is True
+    assert result["result"] == "_PdT(δφ, _PdVars(D1('α')))"
+    assert result["free"] == ["α"]
+    assert result["tex"] == "\\partial_{α} δφ"
+
+
 def test_compute_mathgr_accepts_restricted_lambda_hooks():
     result = compute_mathgr("Simp(x, hooks=[lambda e: e.xreplace({x: y})])")
 

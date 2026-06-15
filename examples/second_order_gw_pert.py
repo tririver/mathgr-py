@@ -30,10 +30,10 @@ from mathgr.util import Eps, OO
 
 a = sp.Symbol("a")
 H = sp.Symbol("H")
-epsilon = sp.Symbol("epsilon")
-eta = sp.Symbol("eta")
-eta2 = sp.Symbol("eta2")
-eta3 = sp.Symbol("eta3")
+ε = sp.Symbol("ε")
+η = sp.Symbol("η")
+η2 = sp.Symbol("η2")
+η3 = sp.Symbol("η3")
 Mp = sp.Symbol("Mp")
 
 g = tensor("g")
@@ -50,7 +50,7 @@ def ShiftN(index):
     return sp.Integer(0)
 
 
-def gamma(first, second):
+def γ(first, second):
     first = sp.sympify(first)
     second = sp.sympify(second)
     if _is_index(first, DN) and _is_index(second, DN) and first.label == second.label:
@@ -65,8 +65,8 @@ def h(first, second):
         dummy = DN(_fresh_label(first, second))
         return a**2 * (
             Dta(first, second)
-            + Eps * gamma(first, second)
-            + Eps**2 * gamma(first, dummy) * gamma(dummy, second) / 2
+            + Eps * γ(first, second)
+            + Eps**2 * γ(first, dummy) * γ(dummy, second) / 2
         )
     if _is_index(first, UP) and _is_index(second, UP):
         first_down = DN(first.label)
@@ -74,8 +74,8 @@ def h(first, second):
         dummy = DN(_fresh_label(first, second))
         return (
             Dta(first_down, second_down)
-            - Eps * gamma(first_down, second_down)
-            + Eps**2 * gamma(first_down, dummy) * gamma(dummy, second_down) / 2
+            - Eps * γ(first_down, second_down)
+            + Eps**2 * γ(first_down, dummy) * γ(dummy, second_down) / 2
         ) / a**2
     if isinstance(first, Index) and isinstance(second, Index) and first.head.dual_name == second.head_name:
         return Dta(first, second)
@@ -106,8 +106,8 @@ def derived_second_order_action():
 
 def _notebook_quadratic_action():
     return (
-        Mp**2 * a**3 * Pd(gamma(DN("a"), DN("b")), DE(0)) ** 2 / 8
-        - Mp**2 * a * Pd(gamma(DN("a"), DN("b")), DN("c")) ** 2 / 8
+        Mp**2 * a**3 * Pd(γ(DN("a"), DN("b")), DE(0)) ** 2 / 8
+        - Mp**2 * a * Pd(γ(DN("a"), DN("b")), DN("c")) ** 2 / 8
     )
 
 
@@ -183,7 +183,7 @@ def _background_replacement(expr):
         return sp.Integer(0)
     if _is_gamma_trace(base):
         return sp.Integer(0)
-    if base in {a, H, epsilon, eta} and any(_is_index(index, DN) for index in derivative_indices):
+    if base in {a, H, ε, η} and any(_is_index(index, DN) for index in derivative_indices):
         return sp.Integer(0)
     if _is_transverse_gamma_derivative(base, derivative_indices):
         return sp.Integer(0)
@@ -191,24 +191,24 @@ def _background_replacement(expr):
         if base == a:
             return a * H
         if base == H:
-            return -epsilon * H**2
-        if base == epsilon:
-            return H * epsilon * eta
-        if base == eta:
-            return H * eta2 * eta
-        if base == eta2:
-            return H * eta3 * eta2
+            return -ε * H**2
+        if base == ε:
+            return H * ε * η
+        if base == η:
+            return H * η2 * η
+        if base == η2:
+            return H * η3 * η2
     if tuple(derivative_indices) == (DE(0), DE(0)):
         if base == a:
-            return a * H**2 - a * H**2 * epsilon
+            return a * H**2 - a * H**2 * ε
         if base == H:
-            return 2 * H**3 * epsilon**2 - H**3 * epsilon * eta
+            return 2 * H**3 * ε**2 - H**3 * ε * η
     if tuple(derivative_indices) == (DE(0), DE(0), DE(0)) and base == H:
         return (
-            -6 * H**4 * epsilon**3
-            + 7 * H**4 * epsilon**2 * eta
-            - H**4 * epsilon * eta**2
-            - H**4 * epsilon * eta * eta2
+            -6 * H**4 * ε**3
+            + 7 * H**4 * ε**2 * η
+            - H**4 * ε * η**2
+            - H**4 * ε * η * η2
         )
     return None
 

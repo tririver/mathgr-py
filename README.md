@@ -12,11 +12,16 @@ The package has two user-facing interfaces:
 - MCP interface: designed for Codex, Claude Code, and other coding agents. It
   accepts Python-like expression strings, auto-declares tensors and indices, and
   exposes tools such as `mathgr_compute`, `mathgr_parse`, and `mathgr_tex`.
-  Example agent call: `mathgr_compute("Simp(Dta(U('a'), D('b')) * f(U('b')))")`.
+  Example agent call: `mathgr_compute("Simp(Dta(U('α'), D('β')) * f(U('β')))")`.
 
 Wolfram is not needed. The test suite translates upstream MathGR
 tests and notebook cells to pytest, with an optional Wolfram oracle test for
 checking the original package.
+
+MathGR-Py is Unicode-first for common Greek physics symbols. Prefer names such
+as `φ`, `δφ`, `φ0`, `ζ`, `ε`, `η`, `α`, and `β` in Python and MCP expressions.
+Use normal index constructors with UTF-8 labels when useful, for example
+`U1("α")`, `D1("β")`, or `DN("i")`.
 
 ## Why Python and SymPy?
 
@@ -143,6 +148,26 @@ Output:
 
 ```text
 0
+```
+
+Use UTF-8 Greek scalar names directly:
+
+```python
+import sympy as sp
+import mathgr.typeset as typeset
+from mathgr import D1, Pd, ToTeXString
+
+δφ = sp.Symbol("δφ")
+typeset.ToTeXTemplate = False
+print(Pd(δφ, D1("α")))
+print(ToTeXString(Pd(δφ, D1("α"))))
+```
+
+Output:
+
+```text
+_PdT(δφ, _PdVars(D1('α')))
+\partial_{α} δφ
 ```
 
 Split time and space indices:
@@ -300,7 +325,7 @@ and `mathgr_script` only for debugging. Use `mathgr_run_python` /
 Example:
 
 ```text
-mathgr_compute("Simp(Dta(U('a'), D('b')) * f(U('b')))")
+mathgr_compute("Simp(Dta(U('α'), D('β')) * f(U('β')))")
 ```
 
 The MCP server infers:
@@ -314,7 +339,8 @@ f = tensor("f")
 Typical MCP calls:
 
 ```text
-mathgr_compute("Simp(Dta(U('a'), D('b')) * f(U('b')))")
+mathgr_compute("Simp(Dta(U('α'), D('β')) * f(U('β')))")
+mathgr_compute("Pd(δφ, D1('α'))")
 mathgr_compute("Decomp0i(f(DTot('a')) * f(UTot('a')))")
 mathgr_compute("Ibp(y * Pd(x, D('i')))")
 mathgr_compute("OO(2)((1 + Eps*x)**3)")
@@ -328,25 +354,22 @@ Override dimensions when needed:
 {"index_dims": {"U/D": 3}}
 ```
 
-Use contexts for multi-step calculations:
+Use the default context for normal multi-step calculations. Omit `context`
+unless you intentionally need parallel or incompatible branches:
 
 ```text
-mathgr_compute(
-  """
+mathgr_compute("""
 trace = Dta(U('a'), D('a'))
 simplified = Simp(Dta(U('a'), D('b')) * f(U('b')))
 result = trace
-  """,
-  context="demo",
-  index_dims={"U/D": 3}
-)
-mathgr_compute("trace", context="demo")
+""")
+mathgr_compute("simplified")
 ```
 
 Result:
 
 ```text
-3
+f(U('a'))
 ```
 
 If `context` is omitted, `mathgr_compute` uses and auto-creates `"default"`.
@@ -363,6 +386,10 @@ mathgr_context_get()
 
 `result = ...` controls the returned value but is not persisted as context
 state. Use a regular assignment, or `store_as`, for durable values.
+
+Named contexts are for explicit forks only, such as comparing `baseline` and
+`gauge_fixed` states. Do not create new contexts for ordinary retries or probes;
+keep using the default context so traces remain readable.
 
 Top-level declarations persist too:
 
