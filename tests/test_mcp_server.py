@@ -11,7 +11,6 @@ from mathgr.mcp_server import (
     evaluate_mathgr,
     get_mathgr_context,
     get_mathgr_manual,
-    get_mathgr_topic,
     inspect_mathgr,
     list_mathgr_capabilities,
     parse_mathgr,
@@ -28,14 +27,8 @@ def test_list_mathgr_capabilities_groups_public_api_for_agents():
     assert "gr" in capabilities
     assert "Simp" in capabilities["tensor"]
     assert "R" in capabilities["gr"]
-
-
-def test_get_mathgr_topic_returns_quick_reference_text():
-    topic = get_mathgr_topic("decomp")
-
-    assert topic["topic"] == "decomp"
-    assert "Decomp0i" in topic["content"]
-    assert "UTot" in topic["content"]
+    assert capabilities["mcp_primary"][0] == "mathgr_compute"
+    assert "mathgr_eval" in capabilities["mcp_escape_hatch"]
 
 
 def test_evaluate_mathgr_runs_trusted_snippet_with_mathgr_imports():
@@ -203,6 +196,7 @@ def test_compute_mathgr_runs_ordinary_mathgr_functions_and_tex_script_helpers():
     assert "result = Simp(" in script["python"]
     assert manual["ok"] is True
     assert "mathgr_compute" in manual["content"]
+    assert "first-choice tool" in manual["content"]
 
 
 def test_compute_mathgr_supports_custom_expansion_symbol_directly():
@@ -224,7 +218,6 @@ def test_create_mcp_registers_mathgr_tools():
     registered = asyncio.run(list_tool_names())
     assert {
         "mathgr_capabilities",
-        "mathgr_topic",
         "mathgr_eval",
         "mathgr_run_python",
         "mathgr_manual",
@@ -238,3 +231,4 @@ def test_create_mcp_registers_mathgr_tools():
         "mathgr_context_clear",
         "mathgr_script",
     } <= registered
+    assert "mathgr_topic" not in registered

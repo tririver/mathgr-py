@@ -125,93 +125,30 @@ CAPABILITIES = {
         "ToTeX",
         "DecorateTeXString",
     ],
-    "mcp_structured": [
-        "mathgr_manual",
-        "mathgr_parse",
+    "mcp_primary": [
         "mathgr_compute",
-        "mathgr_inspect",
         "mathgr_tex",
+    ],
+    "mcp_debugging": [
+        "mathgr_parse",
+        "mathgr_inspect",
+        "mathgr_script",
+    ],
+    "mcp_context": [
         "mathgr_context_create",
         "mathgr_context_update",
         "mathgr_context_get",
         "mathgr_context_clear",
-        "mathgr_script",
+    ],
+    "mcp_docs": [
+        "mathgr_manual",
+        "mathgr_capabilities",
+    ],
+    "mcp_escape_hatch": [
         "mathgr_run_python",
+        "mathgr_eval",
     ],
 }
-
-
-TOPICS = {
-    "quickstart": """\
-Use `from mathgr import *` for notebook exploration, or explicit imports for scripts.
-Typical flow:
-1. Declare indices: `u, d = declare_idx("U", "D", dim=3, index_set=LatinIdx)`.
-2. Create tensor heads: `f = tensor("f")`.
-3. Build expressions: `Dta(u("a"), d("b")) * f(u("b"))`.
-4. Simplify: `Simp(expr)`.
-Set `result = ...` in `mathgr_eval` to return a value.
-For most agent workflows prefer structured tools such as `mathgr_compute`,
-`mathgr_parse`, and `mathgr_inspect`; they auto-declare Python-like inputs.
-""",
-    "mcp": """\
-Structured MCP tools use Python-like expression strings with auto declarations.
-Example: `mathgr_compute("Simp(Dta(U('a'), D('b')) * f(U('b')))")`.
-Unknown index calls such as `U('a')`/`D('a')` declare `U,D` with symbolic
-dimension `Dim`; unknown tensor calls such as `f(U('a'))` declare tensor heads.
-Use `mathgr_parse` first to inspect generated Python, put ordinary MathGR calls
-such as `Simp`, `Decomp0i`, `Ibp`, or `OO(2)` inside `mathgr_compute`, use
-`mathgr_context_*` for reusable state, and `mathgr_run_python` only as an escape
-hatch.
-""",
-    "tensor": """\
-Core tensor API:
-- `UP`, `DN`, `UE`, `DE`: default implicit/explicit index families.
-- `declare_idx(up, down, dim=..., index_set=...)`: create dual index families.
-- `tensor(name)`: create tensor head.
-- `Dta`, `DtaGen`, `LeviCivita`: delta and epsilon helpers.
-- `Pd`, `P`, `PdT`, `PdVars`, `Pm2`: derivatives and inverse Laplacian.
-- `Simp`, `SimpUq`: simplify expressions.
-- `DeclareSym(head, signature, Symmetric(...))`: declare slot symmetries.
-""",
-    "gr": """\
-GR API:
-- `UseMetric(metric, (up, down))`: register metric and default index family.
-- `WithMetric(metric, (up, down), callback)`: temporary default metric.
-- `MetricContract(expr)`: contract `UG`/`DG` slots.
-- `Affine`, `CovD`, `R`, `G`, `RicciScalar`, `Rsimp`: curvature helpers.
-Example: second Bianchi sum over `CovD(R(...), ...)` simplifies to `0`.
-""",
-    "decomp": """\
-Decomposition API:
-- `UTot`, `DTot`: total index family.
-- `U1/D1`, `U2/D2`: sector index families.
-- `Decomp0i(expr)`: split total dummy labels into explicit time plus spatial indices.
-- `Decomp01i`, `Decomp0123`, `Decomp1i`, `Decomp123`, `DecompSe`: other sector splits.
-""",
-    "perturbation": """\
-Perturbation utilities:
-- `Eps`: default perturbation symbol.
-- `TSeries(expr, (Eps, 0, n))`: tensor-aware series.
-- `SS(n)(expr)`: keep series through order `n`.
-- `OO(n)(expr)`: extract order `n`.
-- `CollectEps`, `LocalToK`, `SolveExpr`, `TReplace`: helper transforms.
-""",
-    "ibp": """\
-IBP utilities:
-- `Ibp`, `Ibp2`, `IbpNB`: integration-by-parts transforms.
-- `IbpVariation(expr, target)`: variation helper.
-- `Pm2Rules`, `Pm2Simp`: inverse-Laplacian simplification.
-- `TrySimp`, `TrySimp2`: ranked replacement search.
-""",
-    "typeset": """\
-TeX API:
-- `mathgr.typeset.ToTeXTemplate = False` for fragment output.
-- `ToTeXString(expr)`: return TeX string.
-- `ToTeX(expr)`: print TeX string.
-- `DecorateTeXString(text)`: upstream-style cleanup and line breaks.
-""",
-}
-
 
 @dataclass(frozen=True)
 class EvalResult:
@@ -232,18 +169,6 @@ class EvalResult:
 def list_mathgr_capabilities() -> dict[str, list[str]]:
     """Return grouped public MathGR APIs useful to coding agents."""
     return {group: list(names) for group, names in CAPABILITIES.items()}
-
-
-def get_mathgr_topic(topic: str = "quickstart") -> dict[str, str]:
-    """Return a compact quick-reference topic for MathGR usage."""
-    key = str(topic).strip().lower()
-    if key not in TOPICS:
-        available = ", ".join(sorted(TOPICS))
-        return {
-            "topic": key,
-            "content": f"Unknown topic. Available topics: {available}.",
-        }
-    return {"topic": key, "content": TOPICS[key]}
 
 
 def evaluate_mathgr(code: str, timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS) -> dict[str, str | bool]:
@@ -475,37 +400,34 @@ def create_mcp():
     mcp = FastMCP(
         SERVER_NAME,
         instructions=(
-            "MathGR symbolic tensor/GR toolkit. Prefer structured tools: "
-            "mathgr_parse to inspect auto declarations, mathgr_compute to evaluate "
-            "Python-like MathGR expressions with explicit calls such as Simp/Ibp/OO, "
-            "mathgr_context_* for reusable state. Use mathgr_manual for docs. "
-            "Use mathgr_run_python only when structured tools cannot express the calculation."
+            "MathGR symbolic tensor/GR toolkit. PRIMARY RULE: use mathgr_compute "
+            "as the first-choice tool for almost all MathGR calculations. Put "
+            "ordinary MathGR calls such as Simp, Decomp0i, Ibp, OO(2), ToTeXString "
+            "inside the expression. Use mathgr_parse, mathgr_inspect, and "
+            "mathgr_script only for debugging/reproduction. Use mathgr_run_python "
+            "or mathgr_eval only as last-resort debugging escape hatches when "
+            "mathgr_compute cannot express the workflow. Use mathgr_manual for docs."
         ),
     )
 
     @mcp.tool()
     def mathgr_capabilities() -> dict[str, list[str]]:
-        """List grouped MathGR APIs exposed for agent use."""
+        """List MathGR APIs; use `mcp_primary` first, especially `mathgr_compute`."""
         return list_mathgr_capabilities()
 
     @mcp.tool()
-    def mathgr_topic(topic: str = "quickstart") -> dict[str, str]:
-        """Return a compact MathGR quick-reference topic."""
-        return get_mathgr_topic(topic)
-
-    @mcp.tool()
     def mathgr_eval(code: str, timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS) -> dict[str, str | bool]:
-        """Run a trusted MathGR snippet and return result/stdout/stderr."""
+        """Legacy debugging escape hatch. Do not use for normal calculations; prefer mathgr_compute."""
         return evaluate_mathgr(code, timeout_seconds=timeout_seconds)
 
     @mcp.tool()
     def mathgr_run_python(code: str, timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS) -> dict[str, str | bool]:
-        """Escape hatch: run a trusted MathGR Python snippet; prefer structured tools first."""
+        """Last-resort debugging escape hatch for trusted Python. Prefer mathgr_compute."""
         return evaluate_mathgr(code, timeout_seconds=timeout_seconds)
 
     @mcp.tool()
     def mathgr_manual(section: str | None = None, query: str | None = None) -> dict[str, Any]:
-        """Read the MathGR manual or a named section/query snippet."""
+        """Read the MathGR manual. For calculations, use mathgr_compute first."""
         return get_mathgr_manual(section=section, query=query)
 
     @mcp.tool()
@@ -523,7 +445,7 @@ def create_mcp():
         output: list[str] | None = None,
         timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
     ) -> dict[str, Any]:
-        """Dry-run a Python-like MathGR expression and return inferred declarations/Python."""
+        """Debugging aid only: dry-run auto declarations/Python. For actual math, use mathgr_compute."""
         return parse_mathgr(
             expr,
             context=context,
@@ -555,7 +477,7 @@ def create_mcp():
         store_as: str | None = None,
         timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
     ) -> dict[str, Any]:
-        """Auto-declare and evaluate a Python-like MathGR expression; call Simp/Ibp/etc. explicitly."""
+        """PRIMARY calculation tool: auto-declare and evaluate Python-like MathGR with explicit Simp/Ibp/etc."""
         return compute_mathgr(
             expr,
             context=context,
@@ -587,7 +509,7 @@ def create_mcp():
         output: list[str] | None = None,
         timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
     ) -> dict[str, Any]:
-        """Inspect indices, tensor heads, derivative nodes, and Pm2 nodes."""
+        """Debugging aid only: inspect indices/tensor heads/Pd/Pm2. For actual math, use mathgr_compute."""
         return inspect_mathgr(
             expr,
             context=context,
@@ -670,7 +592,7 @@ def create_mcp():
         declarations: dict[str, Any] | None = None,
         index_dims: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Export reproducible Python for an expression operation or context."""
+        """Debugging/reproduction aid only: export Python. For actual math, use mathgr_compute."""
         return script_mathgr(
             expr_or_context,
             operation=operation,

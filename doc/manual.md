@@ -1025,7 +1025,6 @@ Registered tools:
 
 ```text
 mathgr_capabilities
-mathgr_topic
 mathgr_manual
 mathgr_parse
 mathgr_compute
@@ -1040,9 +1039,12 @@ mathgr_run_python
 mathgr_eval
 ```
 
-Agents should prefer structured tools over raw Python. The structured tools
-accept Python-like expression strings and auto-declare index families, tensor
-heads, and scalar symbols.
+`mathgr_compute` is the first-choice tool for almost all MathGR calculations.
+It is usually easier than raw Python because it accepts Python-like expression
+strings and auto-declares index families, tensor heads, and scalar symbols.
+Use `mathgr_parse`, `mathgr_inspect`, and `mathgr_script` only for debugging or
+reproduction. Use `mathgr_run_python` / `mathgr_eval` only as last-resort
+debugging escape hatches when `mathgr_compute` cannot express the workflow.
 
 Example:
 
@@ -1066,15 +1068,14 @@ Dimension override:
 
 `mathgr_parse(expr, ...)`
 
-: Dry-run parser. Returns inferred index families, tensor heads, symbols,
-  diagnostics, and generated Python. Use this first when expression intent is
-  unclear.
+: Debugging aid only. Dry-run parser that returns inferred index families,
+  tensor heads, symbols, diagnostics, and generated Python.
 
 `mathgr_compute(expr, ...)`
 
-: Evaluates the Python-like MathGR expression exactly as written, with
-  auto-declared symbols, tensor heads, and index families. Put ordinary MathGR
-  calls directly in the expression:
+: First-choice tool. Evaluates the Python-like MathGR expression exactly as
+  written, with auto-declared symbols, tensor heads, and index families. Put
+  ordinary MathGR calls directly in the expression:
 
 ```python
 Simp(Dta(U('a'), D('b')) * f(U('b')))
@@ -1086,8 +1087,8 @@ OO(2)((1 + Eps*x)**3)
 
 `mathgr_inspect(expr, ...)`
 
-: Returns `idx`, `free`, `dummy`, tensor heads, derivative-node count, and
-  `Pm2` count.
+: Debugging aid only. Returns `idx`, `free`, `dummy`, tensor heads,
+  derivative-node count, and `Pm2` count.
 
 `mathgr_tex(expr, fragment=True, ...)`
 
@@ -1102,7 +1103,8 @@ OO(2)((1 + Eps*x)**3)
 
 `mathgr_script(expr_or_context, operation=None, ...)`
 
-: Exports reproducible Python for a structured calculation.
+: Debugging/reproduction aid only. Exports reproducible Python for a structured
+  calculation.
 
 `mathgr_manual(section=None, query=None)`
 
@@ -1111,21 +1113,9 @@ OO(2)((1 + Eps*x)**3)
 
 `mathgr_capabilities` returns grouped public APIs.
 
-`mathgr_topic(topic)` returns compact references. Topics:
-
-```text
-quickstart
- mcp
-tensor
-gr
-decomp
-perturbation
-ibp
-typeset
-```
-
-`mathgr_run_python(code, timeout_seconds=10.0)` and legacy `mathgr_eval` run a
-trusted snippet in a child process. The namespace preloads:
+`mathgr_run_python(code, timeout_seconds=10.0)` and legacy `mathgr_eval` are
+last-resort debugging escape hatches. They run a trusted snippet in a child
+process. The namespace preloads:
 
 ```python
 import sympy as sp
@@ -1150,9 +1140,8 @@ Eval limits:
 - imports are limited to `json`, `sympy`, `mathgr`, and MathGR submodules
 - MathGR global state is snapshotted and restored after each eval
 
-Raw Python tools are escape hatches for workflows that structured tools cannot
-express. They are for trusted symbolic snippets and are not a general Python
-sandbox.
+Raw Python tools are for workflows that `mathgr_compute` cannot express. They
+are for trusted symbolic snippets and are not a general Python sandbox.
 
 See the repository `README.md` for Codex and Claude Code installation recipes.
 
@@ -1298,5 +1287,6 @@ ToTeXString ToTeX DecorateTeXString ToTeXHook ToTeXTemplate
   globals are mutable process state.
 - `TPower` and `TSeries` may preserve raw repeated dummy labels until `Simp`.
 - `Method="Fast"` skips heavier tensor-product symmetry reduction.
-- MCP `mathgr_eval` restores MathGR globals after each run, but it still runs
-  trusted Python snippets and should not be treated as a hardened sandbox.
+- MCP raw Python escape hatches restore MathGR globals after each run, but they
+  still run trusted Python snippets and should not be treated as a hardened
+  sandbox.
