@@ -358,6 +358,82 @@ mathgr_compute("Simp(lhs - rhs)")
 mathgr_tex("Pd(f(U('a')), D('i'))")
 ```
 
+#### MCP Cookbook
+
+Perturbation expansion:
+
+```text
+mathgr_compute("""
+L2 = Simp(OO(2)(TSeries(L, (Eps, 0, 3))))
+result = L2
+""")
+```
+
+Derivative conventions:
+
+| notation | MCP expression |
+| --- | --- |
+| `dot(f)` | `Pd(f, DE(0))` |
+| `partial_i f` | `Pd(f, DN("i"))` |
+| `partial_i partial_j f` | `Pd(Pd(f, DN("i")), DN("j"))` |
+
+When calling the MCP tool with a multi-line block, pass the block body as
+`expr`. Do not include Python triple-quote delimiters inside the MCP `expr`
+value. Triple quotes are only a convenient way to show multi-line examples in
+this README.
+
+Flat-gauge ADM scalar-field setup:
+
+```text
+mathgr_compute("""
+N = 1 + Eps*α
+Ni = Eps*Pd(β, DN("i"))
+φ = φ0 + Eps*δφ
+φdot = Pd(φ, DE(0))
+gradφ = Pd(φ, DN("i"))
+result = Ni + φdot
+""")
+```
+
+For the full ADM scalar-field density, use the FRW ADM helpers as the starting
+point and then extract the desired perturbative order:
+
+```text
+mathgr_compute("""
+φ = φ0 + Eps*δφ
+i = sp.Wild("i")
+flat_rules = {b(DN(i)): 0, Pd(φ0, DN(i)): 0}
+L = frwadm.Sqrtg * (frwadm.RADM()/2 + frwadm.DecompG2H(lambda: X(φ)) - V(φ))
+L_flat = TReplace(flat_rules)(L.xreplace({ζ: 0}))
+L2 = frwadm.Simp(OO(2)(TSeries(L_flat, (Eps, 0, 3))))
+result = L2
+""", timeout_seconds=30)
+```
+
+Constraint extraction by integration by parts:
+
+```text
+mathgr_compute("""
+beta_terms = Simp(IbpVariation(L2, β))
+constraint_beta = Simp(beta_terms.coeff(β))
+result = constraint_beta
+""")
+```
+
+Use `IbpVariation(expr, β)` to move derivatives off `β`, then take the
+coefficient of `β`. Use `IbpNB` when you want boundary holders dropped.
+
+TeX output:
+
+```text
+mathgr_tex("L2", fragment=True)
+mathgr_compute("Simp(lhs - rhs)")
+```
+
+Use raw MCP TeX for exact, checkable output tied to the expression tree. For a
+paper or note, hand-clean notation after the algebra is verified; keep the
+machine expression for zero-checks such as `Simp(lhs - rhs)`.
+
 Override dimensions when needed:
 
 ```json
