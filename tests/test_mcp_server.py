@@ -1,6 +1,5 @@
 import asyncio
 import json
-
 import pytest
 
 pytest.importorskip("mcp")
@@ -453,6 +452,18 @@ def test_compute_mathgr_respects_timeout_for_expensive_expression():
     assert "timed out" in result["stderr"]
 
 
+def test_structured_mathgr_defaults_to_in_process_timeout(monkeypatch):
+    def fail_process_context():
+        raise AssertionError("default structured calls should not spawn a timeout worker")
+
+    monkeypatch.setattr(mcp_structured, "_process_context", fail_process_context)
+
+    result = compute_mathgr("1+1", output=["str"])
+
+    assert result["ok"] is True
+    assert result["result"] == "2"
+
+
 def test_simplify_mathgr_store_as_uses_default_context():
     clear_mathgr_context("default")
 
@@ -518,9 +529,31 @@ def test_mcp_structured_tools_handle_trivial_stdio_calls_without_fork_timeout():
     assert parsed["python"].endswith("result = 1+1")
 
 
-def test_mcp_default_timeout_is_three_minutes():
+def test_mcp_default_timeout_keeps_raw_eval_bounded_but_structured_in_process_by_default():
     assert DEFAULT_TIMEOUT_SECONDS >= 180
-    assert getattr(mcp_structured, "DEFAULT_TIMEOUT_SECONDS", 0) >= 180
+    assert getattr(mcp_structured, "DEFAULT_TIMEOUT_SECONDS", None) == 0
+
+
+def test_mcp_tool_schema_defaults_structured_timeout_to_zero():
+    async def timeout_defaults():
+        params = StdioServerParameters(command="uv", args=["run", "mathgr-mcp"])
+        async with stdio_client(params) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                tools = await session.list_tools()
+                return {
+                    tool.name: tool.inputSchema["properties"].get("timeout_seconds", {}).get("default")
+                    for tool in tools.tools
+                    if tool.name in {"mathgr_eval", "mathgr_compute", "mathgr_parse", "mathgr_inspect", "mathgr_tex"}
+                }
+
+    defaults = asyncio.run(timeout_defaults())
+
+    assert defaults["mathgr_eval"] >= 180
+    assert defaults["mathgr_compute"] == 0
+    assert defaults["mathgr_parse"] == 0
+    assert defaults["mathgr_inspect"] == 0
+    assert defaults["mathgr_tex"] == 0
 
 
 def test_mcp_guidance_prefers_expr_only_default_context_calls():
@@ -538,5 +571,7 @@ def test_mcp_guidance_prefers_expr_only_default_context_calls():
     assert "pass only the expr string" in instructions
     assert "omit context" in instructions
     assert "JSON is only the transport format" in instructions
+    assert "Do not predefine ordinary scalar symbols or temporary variables" in instructions
     assert "pass only expr" in descriptions["mathgr_compute"]
+    assert "auto-declares scalars, tensor heads, and index families" in descriptions["mathgr_compute"]
     assert "Do not call by default" in descriptions["mathgr_context_clear"]

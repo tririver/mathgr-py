@@ -23,7 +23,7 @@ tensor_module = import_module("mathgr.tensor")
 
 
 DEFAULT_OUTPUT = ("str", "tex", "diagnostics", "python")
-DEFAULT_TIMEOUT_SECONDS = 180.0
+DEFAULT_TIMEOUT_SECONDS = 0.0
 DEFAULT_DIM_SYMBOL = "Dim"
 DEFAULT_CONTEXT_NAME = "default"
 CONTEXT_SCHEMA_VERSION = 1
@@ -1680,13 +1680,15 @@ def _fallback_manual_text() -> str:
     return """# MathGR MCP
 
 Use `mathgr_compute` first. It evaluates Python-like MathGR expressions or
-multi-line notebook blocks, auto-declares common tensor/index names, and
-persists assignments in the default or named context. Use `mathgr_context_get`
-to list context source definitions, `mathgr_context_save/load` for JSON
-persistence, and `mathgr_run_python` only when structured tools cannot express
-the calculation. Default call style: pass only the `expr` string and omit
-`context`, `output`, `timeout_seconds`, and other optional arguments unless
-they are actually needed. JSON is only the MCP transport format; examples and
+multi-line notebook blocks, auto-declares ordinary scalar names, tensor heads,
+and index families, and persists assignments in the default or named context.
+For most derivations, do not predefine ordinary scalar symbols or temporary
+variables; write the calculation directly. Use `mathgr_context_get` to list
+context source definitions, `mathgr_context_save/load` for JSON persistence,
+and `mathgr_run_python` only when structured tools cannot express the
+calculation. Default call style: pass only the `expr` string and omit `context`,
+`output`, `timeout_seconds`, and other optional arguments unless they are
+actually needed. JSON is only the MCP transport format; examples and
 human-readable traces should prefer `mathgr_compute("Simp(x)")`. Use named
 contexts only for explicit parallel or incompatible calculation branches.
 """

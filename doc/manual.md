@@ -1050,19 +1050,25 @@ mathgr_eval
 
 `mathgr_compute` is the first-choice tool for almost all MathGR calculations.
 It is usually easier than raw Python because it accepts Python-like expression
-strings or multi-line notebook blocks, auto-declares index families, tensor
-heads, and scalar symbols, and persists assignments in a context. Use
-`mathgr_parse`, `mathgr_inspect`, and `mathgr_script` only for debugging or
+strings or multi-line notebook blocks, auto-declares ordinary scalar names,
+tensor heads, and index families, and persists assignments in a context. For
+most derivations, do not predefine scalar symbols, tensor heads, or temporary
+names just to make them exist; write the calculation directly, using multi-line
+`mathgr_compute` assignments only when a derived expression should be reused.
+Use `mathgr_parse`, `mathgr_inspect`, and `mathgr_script` only for debugging or
 reproduction. Use `mathgr_run_python` / `mathgr_eval` only as last-resort
 debugging escape hatches when `mathgr_compute` cannot express the workflow.
 For ordinary calls, pass only the expression string and omit optional fields
 such as `context`, `output`, and `timeout_seconds`. JSON objects are only the MCP
 transport format; examples and traces should prefer `mathgr_compute("...")`.
+Structured MCP tools default to `timeout_seconds=0`, which runs in-process for
+low latency. Set a positive timeout only for risky or potentially long symbolic
+calls that need subprocess cancellation.
 
 Example:
 
 ```text
-mathgr_compute("Simp(Dta(U('α'), D('β')) * f(U('β')))")
+mathgr_compute("Simp(Dta(U('α'), D('β')) * f(U('β')) + x)")
 mathgr_compute("Pd(δφ, D1('α'))")
 ```
 
@@ -1072,6 +1078,7 @@ Auto declarations:
 Dim = sp.Symbol("Dim")
 U, D = declare_idx("U", "D", dim=Dim)
 f = tensor("f")
+x = sp.Symbol("x")
 ```
 
 Dimension override:

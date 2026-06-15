@@ -316,19 +316,25 @@ Core tools:
   raw trusted Python
 
 Agents should use `mathgr_compute` first for almost every calculation. The
-compute tool is easier than raw Python because it auto-declares index families,
-tensor heads, scalar symbols, and a persistent default context. Use multi-line
-`mathgr_compute` blocks for setup work; use `mathgr_parse`, `mathgr_inspect`,
-and `mathgr_script` only for debugging. Use `mathgr_run_python` /
+compute tool is easier than raw Python because it auto-declares ordinary scalar
+names, tensor heads, index families, and a persistent default context. For most
+derivations, do not predefine scalar symbols, tensor heads, or temporary names
+just to make them exist; write the calculation directly, using multi-line
+`mathgr_compute` assignments only when a derived expression should be reused.
+Use `mathgr_parse`, `mathgr_inspect`, and `mathgr_script` only for debugging.
+Use `mathgr_run_python` /
 `mathgr_eval` only when `mathgr_compute` cannot express the workflow.
 For ordinary calls, pass only the expression string and omit optional fields
 such as `context`, `output`, and `timeout_seconds`. JSON objects are only the MCP
 transport format; examples and traces should prefer `mathgr_compute("...")`.
+Structured MCP tools default to `timeout_seconds=0`, which runs in-process for
+low latency. Set a positive timeout only for risky or potentially long symbolic
+calls that need subprocess cancellation.
 
 Example:
 
 ```text
-mathgr_compute("Simp(Dta(U('α'), D('β')) * f(U('β')))")
+mathgr_compute("Simp(Dta(U('α'), D('β')) * f(U('β')) + x)")
 ```
 
 The MCP server infers:
@@ -337,6 +343,7 @@ The MCP server infers:
 Dim = sp.Symbol("Dim")
 U, D = declare_idx("U", "D", dim=Dim)
 f = tensor("f")
+x = sp.Symbol("x")
 ```
 
 Typical MCP calls:

@@ -16,6 +16,7 @@ import sympy as sp
 import mathgr
 from .state import restore_state, snapshot_state
 from .mcp_structured import (
+    DEFAULT_TIMEOUT_SECONDS as STRUCTURED_TIMEOUT_SECONDS,
     clear_mathgr_context,
     compute_mathgr,
     get_mathgr_context,
@@ -353,6 +354,9 @@ def create_mcp():
             "MathGR symbolic tensor/GR toolkit. PRIMARY RULE: use mathgr_compute "
             "as the first-choice tool for almost all MathGR calculations. It accepts "
             "single expressions and multi-line notebook blocks with assignments. "
+            "Do not predefine ordinary scalar symbols or temporary variables for most "
+            "derivations; mathgr_compute auto-declares ordinary scalar names, tensor "
+            "heads, and index families. "
             "Default call style: pass only the expr string. Omit context, output, "
             "timeout_seconds, and other optional arguments unless they are actually "
             "needed. JSON is only the transport format; do not show or prefer JSON-style "
@@ -400,7 +404,7 @@ def create_mcp():
         metric: dict[str, Any] | None = None,
         symmetries: list[dict[str, Any]] | None = None,
         output: list[str] | None = None,
-        timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+        timeout_seconds: float = STRUCTURED_TIMEOUT_SECONDS,
     ) -> dict[str, Any]:
         """Debugging aid only: dry-run auto declarations/Python. For actual math, use mathgr_compute."""
         return parse_mathgr(
@@ -432,9 +436,9 @@ def create_mcp():
         symmetries: list[dict[str, Any]] | None = None,
         output: list[str] | None = None,
         store_as: str | None = None,
-        timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+        timeout_seconds: float = STRUCTURED_TIMEOUT_SECONDS,
     ) -> dict[str, Any]:
-        """PRIMARY calculation tool. Default: pass only expr and use default context; omit optional args unless needed."""
+        """PRIMARY calculation tool. Default: pass only expr; auto-declares scalars, tensor heads, and index families."""
         return compute_mathgr(
             expr,
             context=context,
@@ -464,7 +468,7 @@ def create_mcp():
         metric: dict[str, Any] | None = None,
         symmetries: list[dict[str, Any]] | None = None,
         output: list[str] | None = None,
-        timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+        timeout_seconds: float = STRUCTURED_TIMEOUT_SECONDS,
     ) -> dict[str, Any]:
         """Debugging aid only: inspect indices/tensor heads/Pd/Pm2. For actual math, use mathgr_compute."""
         return inspect_mathgr(
@@ -491,7 +495,7 @@ def create_mcp():
         declarations: dict[str, Any] | None = None,
         index_dims: dict[str, Any] | None = None,
         output: list[str] | None = None,
-        timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+        timeout_seconds: float = STRUCTURED_TIMEOUT_SECONDS,
     ) -> dict[str, Any]:
         """Render an expression to TeX."""
         return tex_mathgr(
