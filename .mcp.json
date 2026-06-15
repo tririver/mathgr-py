@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "mathgr": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "mathgr-mcp"]
+    }
+  }
+}
