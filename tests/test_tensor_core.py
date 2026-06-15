@@ -92,6 +92,25 @@ def test_tensor_state_snapshot_restores_uniq_counter():
     assert mathgr.LatinCapitalIdx is tensor_module.LatinCapitalIdx
 
 
+def test_metric_riemann_zero_uses_registered_riemann_like_heads():
+    class _FakeRiemannForRegistry(sp.Expr):
+        is_commutative = True
+
+        def __new__(cls, *indices):
+            return sp.Expr.__new__(cls, *(sp.sympify(index) for index in indices))
+
+    from mathgr.tensor import register_riemann_like
+
+    u, d = declare_idx("regRiemannU", "regRiemannD", dim=4, index_set=mathgr.LatinIdx)
+    metric = tensor("gRegisteredRiemann")
+    UseMetric(metric, (u, d))
+    register_riemann_like(_FakeRiemannForRegistry)
+
+    expr = metric(u("a"), u("b")) * _FakeRiemannForRegistry(d("a"), d("b"), d("c"), d("d"))
+
+    assert Simp(expr) == 0
+
+
 def test_DeclareIdx_accepts_upstream_style_positional_arguments():
     dim_test = sp.Symbol("DimDeclareIdxCompat")
     u, d = DeclareIdx(("DeclareIdxCompatU", "DeclareIdxCompatD"), dim_test, ["i", "j"], "Green")

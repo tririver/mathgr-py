@@ -21,6 +21,7 @@ _METRICS: dict[str, Any] = {}
 _METRIC_HEADS: set[sp.Symbol] = set()
 _METRIC_INDEX_PAIRS: dict[sp.Symbol, list[tuple["IndexType", "IndexType"]]] = {}
 _SYMMETRIES: dict[tuple[sp.Symbol, tuple], list["TensorSymmetry"]] = {}
+_RIEMANN_LIKE_HEADS: set[Any] = set()
 _UNIQ_COUNTER_VALUE = 1
 IdxList: list["IndexType"] = []
 IdxUpList: list["IndexType"] = []
@@ -275,26 +276,15 @@ def UniqueIdx():
 
 
 def _snapshot_tensor_registry_state():
-    return {
-        "metrics": dict(_METRICS),
-        "metric_heads": set(_METRIC_HEADS),
-        "metric_index_pairs": {key: list(value) for key, value in _METRIC_INDEX_PAIRS.items()},
-        "symmetries": {key: list(value) for key, value in _SYMMETRIES.items()},
-        "uniq_counter_value": _UNIQ_COUNTER_VALUE,
-    }
+    from .state import snapshot_state
+
+    return snapshot_state()
 
 
 def _restore_tensor_registry_state(state):
-    global _UNIQ_COUNTER_VALUE
-    _METRICS.clear()
-    _METRICS.update(state["metrics"])
-    _METRIC_HEADS.clear()
-    _METRIC_HEADS.update(state["metric_heads"])
-    _METRIC_INDEX_PAIRS.clear()
-    _METRIC_INDEX_PAIRS.update({key: list(value) for key, value in state["metric_index_pairs"].items()})
-    _SYMMETRIES.clear()
-    _SYMMETRIES.update({key: list(value) for key, value in state["symmetries"].items()})
-    _UNIQ_COUNTER_VALUE = state["uniq_counter_value"]
+    from .state import restore_state
+
+    restore_state(state)
 
 
 class _Dta(sp.Function):
@@ -524,6 +514,11 @@ def TensorReplace(expr_or_rule, rule=None):
     from .util import TReplace
 
     return TReplace(expr_or_rule, rule)
+
+
+def register_riemann_like(func_or_head):
+    _RIEMANN_LIKE_HEADS.add(func_or_head)
+    return func_or_head
 
 
 def Pdts(order, head, *indices):
@@ -1255,23 +1250,9 @@ def _looks_like_simp_hook_rule_pair(value):
 
 
 def _apply_simp_hook_rules(expr, rules):
-    replacements = tuple((sp.sympify(old), new if callable(new) else sp.sympify(new)) for old, new in rules)
-    exact = {
-        old: new
-        for old, new in replacements
-        if not callable(new) and not old.has(sp.Wild)
-    }
-    current = sp.sympify(expr).xreplace(exact)
-    for old, new in replacements:
-        if callable(new):
-            if old.has(sp.Wild):
-                current = current.replace(old, lambda **matches: sp.sympify(new(**matches)))
-            else:
-                current = current.replace(lambda node, old=old: node == old, lambda node: sp.sympify(new(node)))
-            continue
-        if old.has(sp.Wild):
-            current = current.replace(old, new)
-    return current
+    from .rewrite import ReplaceAll
+
+    return ReplaceAll(expr, tuple(rules))
 
 
 def _split_indexed_powers(expr):
@@ -1463,7 +1444,7 @@ def _product_zero_by_cross_symmetry(expr):
 def _product_zero_by_metric_riemann_symmetry(expr):
     factors = list(expr.args) if isinstance(expr, sp.Mul) else [expr]
     metric_factors = [factor for factor in factors if _is_registered_same_variance_metric_factor(factor)]
-    riemann_factors = [factor for factor in factors if factor.func.__name__ == "_LowerRiemann"]
+    riemann_factors = [factor for factor in factors if _is_riemann_like_factor(factor)]
     if not metric_factors or not riemann_factors:
         return False
 
@@ -1481,6 +1462,10 @@ def _product_zero_by_metric_riemann_symmetry(expr):
                 ):
                     return True
     return False
+
+
+def _is_riemann_like_factor(factor):
+    return factor.func in _RIEMANN_LIKE_HEADS or factor in _RIEMANN_LIKE_HEADS
 
 
 def _is_registered_same_variance_metric_factor(factor):

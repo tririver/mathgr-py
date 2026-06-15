@@ -17,11 +17,13 @@ from typing import Any
 import sympy as sp
 
 import mathgr
+from .state import isolated_state
 
 tensor_module = import_module("mathgr.tensor")
 
 
 DEFAULT_OUTPUT = ("str", "tex", "diagnostics", "python")
+DEFAULT_TIMEOUT_SECONDS = 180.0
 DEFAULT_DIM_SYMBOL = "Dim"
 DEFAULT_CONTEXT_NAME = "default"
 CONTEXT_SCHEMA_VERSION = 1
@@ -239,7 +241,7 @@ def parse_mathgr(
     metric: dict[str, Any] | None = None,
     symmetries: list[dict[str, Any]] | None = None,
     output: list[str] | None = None,
-    timeout_seconds: float = 10.0,
+    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
 ) -> dict[str, Any]:
     """Infer declarations for a Python-like MathGR expression without evaluating it."""
     started = time.perf_counter()
@@ -282,7 +284,7 @@ def compute_mathgr(
     symmetries: list[dict[str, Any]] | None = None,
     output: list[str] | None = None,
     store_as: str | None = None,
-    timeout_seconds: float = 10.0,
+    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
 ) -> dict[str, Any]:
     """Auto-declare and evaluate a Python-like MathGR expression without implicit transforms."""
     started = time.perf_counter()
@@ -343,7 +345,7 @@ def simplify_mathgr(
     dummy: list[str] | None = None,
     output: list[str] | None = None,
     store_as: str | None = None,
-    timeout_seconds: float = 10.0,
+    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
 ) -> dict[str, Any]:
     """Auto-declare a Python-like expression, run `Simp`, and return diagnostics."""
     started = time.perf_counter()
@@ -398,7 +400,7 @@ def compare_mathgr(
     metric: dict[str, Any] | None = None,
     symmetries: list[dict[str, Any]] | None = None,
     output: list[str] | None = None,
-    timeout_seconds: float = 10.0,
+    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
 ) -> dict[str, Any]:
     """Simplify `lhs - rhs` and report whether the identity is proven."""
     started = time.perf_counter()
@@ -437,7 +439,7 @@ def inspect_mathgr(
     metric: dict[str, Any] | None = None,
     symmetries: list[dict[str, Any]] | None = None,
     output: list[str] | None = None,
-    timeout_seconds: float = 10.0,
+    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
 ) -> dict[str, Any]:
     """Return index and tensor-head diagnostics for an expression."""
     started = time.perf_counter()
@@ -474,7 +476,7 @@ def derivative_mathgr(
     declarations: dict[str, Any] | None = None,
     index_dims: dict[str, Any] | None = None,
     output: list[str] | None = None,
-    timeout_seconds: float = 10.0,
+    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
 ) -> dict[str, Any]:
     """Apply `Pd` over one or more index expressions."""
     started = time.perf_counter()
@@ -507,7 +509,7 @@ def rewrite_mathgr(
     declarations: dict[str, Any] | None = None,
     index_dims: dict[str, Any] | None = None,
     output: list[str] | None = None,
-    timeout_seconds: float = 10.0,
+    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
 ) -> dict[str, Any]:
     """Apply structured replacement rules to an expression."""
     started = time.perf_counter()
@@ -542,7 +544,7 @@ def decompose_mathgr(
     auto_declare: bool = True,
     declarations: dict[str, Any] | None = None,
     output: list[str] | None = None,
-    timeout_seconds: float = 10.0,
+    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
 ) -> dict[str, Any]:
     """Apply one of the public decomposition presets."""
     started = time.perf_counter()
@@ -572,7 +574,7 @@ def series_mathgr(
     auto_declare: bool = True,
     declarations: dict[str, Any] | None = None,
     output: list[str] | None = None,
-    timeout_seconds: float = 10.0,
+    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
 ) -> dict[str, Any]:
     """Apply perturbation-series helpers: keep, coefficient, series, or collect."""
     started = time.perf_counter()
@@ -610,7 +612,7 @@ def ibp_mathgr(
     declarations: dict[str, Any] | None = None,
     index_dims: dict[str, Any] | None = None,
     output: list[str] | None = None,
-    timeout_seconds: float = 10.0,
+    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
 ) -> dict[str, Any]:
     """Apply public IBP helpers."""
     started = time.perf_counter()
@@ -650,7 +652,7 @@ def transform_mathgr(
     declarations: dict[str, Any] | None = None,
     index_dims: dict[str, Any] | None = None,
     output: list[str] | None = None,
-    timeout_seconds: float = 10.0,
+    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
 ) -> dict[str, Any]:
     """Apply a small pipeline of named public MathGR transforms."""
     started = time.perf_counter()
@@ -679,7 +681,7 @@ def tex_mathgr(
     declarations: dict[str, Any] | None = None,
     index_dims: dict[str, Any] | None = None,
     output: list[str] | None = None,
-    timeout_seconds: float = 10.0,
+    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
 ) -> dict[str, Any]:
     """Render an expression to TeX."""
     started = time.perf_counter()
@@ -1690,73 +1692,11 @@ contexts only for explicit parallel or incompatible calculation branches.
 """
 
 
-def _snapshot_mathgr_state() -> dict[str, Any]:
-    decomp_module = import_module("mathgr.decomp")
-    gr_module = import_module("mathgr.gr")
-    typeset_module = import_module("mathgr.typeset")
-    return {
-        "index_types": dict(tensor_module._INDEX_TYPES),
-        "constants": set(tensor_module._CONSTANTS),
-        "metrics": dict(tensor_module._METRICS),
-        "metric_heads": set(tensor_module._METRIC_HEADS),
-        "metric_index_pairs": {key: list(value) for key, value in tensor_module._METRIC_INDEX_PAIRS.items()},
-        "symmetries": {key: list(value) for key, value in tensor_module._SYMMETRIES.items()},
-        "uniq_counter_value": tensor_module._UNIQ_COUNTER_VALUE,
-        "idx_list": list(tensor_module.IdxList),
-        "idx_up_list": list(tensor_module.IdxUpList),
-        "idx_dn_list": list(tensor_module.IdxDnList),
-        "simp_hook": list(tensor_module.SimpHook),
-        "simp_into1": tuple(tensor_module.SimpInto1),
-        "simp_select": tensor_module.SimpSelect,
-        "decomp_hook": list(decomp_module.DecompHook),
-        "metric": gr_module.Metric,
-        "idx_of_metric": tuple(gr_module.IdxOfMetric),
-        "tex_hook": list(typeset_module.ToTeXHook),
-        "tex_template": typeset_module.ToTeXTemplate,
-    }
-
-
-def _restore_mathgr_state(state: dict[str, Any]) -> None:
-    decomp_module = import_module("mathgr.decomp")
-    gr_module = import_module("mathgr.gr")
-    typeset_module = import_module("mathgr.typeset")
-
-    tensor_module._INDEX_TYPES.clear()
-    tensor_module._INDEX_TYPES.update(state["index_types"])
-    tensor_module._CONSTANTS.clear()
-    tensor_module._CONSTANTS.update(state["constants"])
-    tensor_module._METRICS.clear()
-    tensor_module._METRICS.update(state["metrics"])
-    tensor_module._METRIC_HEADS.clear()
-    tensor_module._METRIC_HEADS.update(state["metric_heads"])
-    tensor_module._METRIC_INDEX_PAIRS.clear()
-    tensor_module._METRIC_INDEX_PAIRS.update({key: list(value) for key, value in state["metric_index_pairs"].items()})
-    tensor_module._SYMMETRIES.clear()
-    tensor_module._SYMMETRIES.update({key: list(value) for key, value in state["symmetries"].items()})
-    tensor_module._UNIQ_COUNTER_VALUE = state["uniq_counter_value"]
-    tensor_module.IdxList[:] = state["idx_list"]
-    tensor_module.IdxUpList[:] = state["idx_up_list"]
-    tensor_module.IdxDnList[:] = state["idx_dn_list"]
-    tensor_module.SimpHook[:] = state["simp_hook"]
-    tensor_module.SimpInto1 = state["simp_into1"]
-    tensor_module.SimpSelect = state["simp_select"]
-    decomp_module.DecompHook[:] = state["decomp_hook"]
-    gr_module.Metric = state["metric"]
-    gr_module.IdxOfMetric = state["idx_of_metric"]
-    typeset_module.ToTeXHook[:] = state["tex_hook"]
-    typeset_module.ToTeXTemplate = state["tex_template"]
-    sp.core.cache.clear_cache()
-
-
 def _isolated_mathgr_state(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
-        state = _snapshot_mathgr_state()
-        try:
-            sp.core.cache.clear_cache()
+        with isolated_state(clear_sympy_cache=True):
             return func(*args, **kwargs)
-        finally:
-            _restore_mathgr_state(state)
 
     return wrapper
 
@@ -1779,7 +1719,7 @@ def _structured_timeout(func):
 
         started = time.perf_counter()
         seconds = max(0.001, seconds)
-        context = get_context("fork") if sys.platform != "win32" else get_context("spawn")
+        context = _process_context()
         queue = context.Queue(maxsize=1)
         process = context.Process(
             target=_structured_tool_worker,
@@ -1817,6 +1757,13 @@ def _structured_tool_worker(name: str, args, kwargs, contexts, queue) -> None:
         queue.put({"response": response, "contexts": _copy_contexts(_CONTEXTS)})
     except BaseException as exc:
         queue.put({"response": _error_response(exc, time.perf_counter()), "contexts": contexts})
+
+
+def _process_context():
+    main_file = getattr(sys.modules.get("__main__"), "__file__", "")
+    if main_file and Path(main_file).exists():
+        return get_context("spawn")
+    return get_context("fork")
 
 
 def _copy_contexts(contexts: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:

@@ -20,12 +20,11 @@ from .tensor import (
     tensor_args,
     tensor_head_name,
 )
-from .util_private import apply2term, prod, prod2times, times2prod
+from .util_private import apply2term, prod
 
 
 Eps = sp.Symbol("Eps")
 _CONSTANTS.add(Eps)
-_MAX_REPLACE_ITERATIONS = 10
 
 
 class MomentumLabel(sp.Expr):
@@ -66,12 +65,9 @@ def SolveExpr(eqs, exprs_raw):
 def TReplace(expr_or_rule, rule=None):
     if rule is None:
         return lambda expr: TReplace(expr, expr_or_rule)
-    replacements = _coerce_replacements(rule)
-    raw_replaced = _replace_until_stable(expr_or_rule, replacements)
-    protected = times2prod(raw_replaced)
-    mapped = _map_replacements_over_products(protected, replacements)
-    replaced = _replace_until_stable(mapped, replacements)
-    return prod2times(replaced)
+    from .rewrite import ReplaceAll
+
+    return ReplaceAll(expr_or_rule, rule)
 
 
 def _flatten_exprs(exprs_raw):
@@ -118,71 +114,6 @@ def _restore_solution(solution, exprs, replacements):
         for expr, replacement in zip(exprs, replacements, strict=True)
         if replacement in solution
     }
-
-
-def _coerce_replacements(rule):
-    if isinstance(rule, dict):
-        items = rule.items()
-    elif _is_rule_pair(rule):
-        items = (rule,)
-    elif isinstance(rule, (list, tuple)):
-        items = rule
-    else:
-        raise TypeError("TReplace rule must be a dict or a sequence of (old, new) pairs.")
-    return OrderedDict(
-        (sp.sympify(old), new if callable(new) else sp.sympify(new))
-        for old, new in items
-    )
-
-
-def _is_rule_pair(value):
-    if not isinstance(value, (list, tuple)) or len(value) != 2:
-        return False
-    left, right = value
-    return not (_looks_like_rule_pair(left) and _looks_like_rule_pair(right))
-
-
-def _looks_like_rule_pair(value):
-    return isinstance(value, (list, tuple)) and len(value) == 2
-
-
-def _map_replacements_over_products(expr, replacements):
-    expr = sp.sympify(expr)
-    if expr.func == prod:
-        return prod(*(_replace_until_stable(arg, replacements) for arg in expr.args))
-    if expr.args:
-        return expr.func(*(_map_replacements_over_products(arg, replacements) for arg in expr.args))
-    return _replace_until_stable(expr, replacements)
-
-
-def _replace_until_stable(expr, replacements):
-    current = sp.sympify(expr)
-    for _ in range(_MAX_REPLACE_ITERATIONS):
-        replaced = _replace_once(current, replacements)
-        if replaced == current:
-            return current
-        current = replaced
-    return current
-
-
-def _replace_once(expr, replacements):
-    exact_replacements = {
-        old: new
-        for old, new in replacements.items()
-        if not callable(new) and not old.has(sp.Wild)
-    }
-    current = sp.sympify(expr).xreplace(exact_replacements)
-    for old, new in replacements.items():
-        if callable(new):
-            if old.has(sp.Wild):
-                current = current.replace(old, lambda **matches: sp.sympify(new(**matches)))
-            else:
-                current = current.replace(lambda node, old=old: node == old, lambda node: sp.sympify(new(node)))
-            continue
-        if not old.has(sp.Wild):
-            continue
-        current = current.replace(old, new)
-    return current
 
 
 def _rename_repeated_product_factors(expr):

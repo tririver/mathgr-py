@@ -9,6 +9,7 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 from mathgr.mcp_server import (
+    DEFAULT_TIMEOUT_SECONDS,
     clear_mathgr_context,
     compute_mathgr,
     evaluate_mathgr,
@@ -22,6 +23,7 @@ from mathgr.mcp_server import (
     script_mathgr,
     tex_mathgr,
 )
+import mathgr.mcp_structured as mcp_structured
 from mathgr.mcp_structured import create_mathgr_context, simplify_mathgr, update_mathgr_context
 
 
@@ -138,6 +140,37 @@ def test_compute_mathgr_uses_auto_declarations_and_explicit_simp_call():
     assert "f^{a}" in contraction["tex"]
     assert trace["ok"] is True
     assert trace["result"] == "Dim"
+
+
+def test_mcp_utf8_compute_and_context_roundtrip(tmp_path):
+    path = tmp_path / "utf8-context.json"
+
+    clear_mathgr_context("default")
+    derivative = compute_mathgr("Pd(δφ, D1('α'))")
+    stored = compute_mathgr(
+        "δφ = sp.Symbol('δφ')\n"
+        "ζ = sp.Symbol('ζ')\n"
+        "η = tensor('η')\n"
+        "expr = δφ + ζ + η(DN('a'))"
+    )
+    saved = save_mathgr_context(path=str(path), overwrite=True)
+    clear_mathgr_context("default")
+    loaded = load_mathgr_context(path=str(path), overwrite=True)
+    fetched = get_mathgr_context()
+    probe = compute_mathgr("expr")
+    clear_mathgr_context("default")
+
+    assert derivative["ok"] is True
+    assert "δφ" in derivative["result"]
+    assert "D1('α')" in derivative["result"]
+    assert stored["ok"] is True
+    assert saved["ok"] is True
+    assert loaded["ok"] is True
+    assert {"δφ", "ζ", "η", "expr"} <= set(fetched["expressions"])
+    assert probe["ok"] is True
+    assert "δφ" in probe["result"]
+    assert "ζ" in probe["result"]
+    assert "η" in probe["result"]
 
 
 def test_compute_mathgr_accepts_utf8_scalar_names_and_index_labels():
@@ -459,6 +492,35 @@ def test_create_mcp_registers_mathgr_tools():
     assert "mathgr_context_create" not in registered
     assert "mathgr_context_update" not in registered
     assert "mathgr_topic" not in registered
+
+
+def test_mcp_structured_tools_handle_trivial_stdio_calls_without_fork_timeout():
+    async def call_trivial_tools():
+        params = StdioServerParameters(command="uv", args=["run", "mathgr-mcp"])
+        async with stdio_client(params) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                computed = await asyncio.wait_for(
+                    session.call_tool("mathgr_compute", {"expr": "1+1", "output": ["str"], "timeout_seconds": 5}),
+                    timeout=8,
+                )
+                parsed = await asyncio.wait_for(
+                    session.call_tool("mathgr_parse", {"expr": "1+1", "output": ["python"], "timeout_seconds": 5}),
+                    timeout=8,
+                )
+                return computed.structuredContent, parsed.structuredContent
+
+    computed, parsed = asyncio.run(call_trivial_tools())
+
+    assert computed["ok"] is True
+    assert computed["result"] == "2"
+    assert parsed["ok"] is True
+    assert parsed["python"].endswith("result = 1+1")
+
+
+def test_mcp_default_timeout_is_three_minutes():
+    assert DEFAULT_TIMEOUT_SECONDS >= 180
+    assert getattr(mcp_structured, "DEFAULT_TIMEOUT_SECONDS", 0) >= 180
 
 
 def test_mcp_guidance_prefers_expr_only_default_context_calls():

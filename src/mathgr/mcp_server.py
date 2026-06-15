@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from contextlib import redirect_stdout
 from dataclasses import dataclass
-from importlib import import_module
 from io import StringIO
 import json
 from multiprocessing import get_context
+from pathlib import Path
 from queue import Empty
 import sys
 import traceback
@@ -14,6 +14,7 @@ from typing import Any
 import sympy as sp
 
 import mathgr
+from .state import restore_state, snapshot_state
 from .mcp_structured import (
     clear_mathgr_context,
     compute_mathgr,
@@ -30,7 +31,7 @@ from .mcp_structured import (
 
 SERVER_NAME = "mathgr"
 MAX_CODE_CHARS = 20_000
-DEFAULT_TIMEOUT_SECONDS = 10.0
+DEFAULT_TIMEOUT_SECONDS = 180.0
 ALLOWED_IMPORTS = {
     "json",
     "mathgr",
@@ -188,7 +189,7 @@ def evaluate_mathgr(code: str, timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS)
         ).as_dict()
 
     timeout_seconds = max(0.1, float(timeout_seconds))
-    context = get_context("fork") if sys.platform != "win32" else get_context("spawn")
+    context = _process_context()
     queue = context.Queue(maxsize=1)
     process = context.Process(target=_evaluate_mathgr_worker, args=(str(code), queue))
     process.start()
@@ -218,10 +219,17 @@ def _evaluate_mathgr_worker(code: str, queue) -> None:
     queue.put(_evaluate_mathgr_in_process(code))
 
 
+def _process_context():
+    main_file = getattr(sys.modules.get("__main__"), "__file__", "")
+    if main_file and Path(main_file).exists():
+        return get_context("spawn")
+    return get_context("fork")
+
+
 def _evaluate_mathgr_in_process(code: str) -> dict[str, str | bool]:
     stdout = StringIO()
     namespace = _eval_namespace()
-    state = _snapshot_mathgr_state()
+    state = snapshot_state()
     try:
         compiled = compile(str(code), "<mathgr-mcp>", "exec")
         with redirect_stdout(stdout):
@@ -242,7 +250,7 @@ def _evaluate_mathgr_in_process(code: str) -> dict[str, str | bool]:
             stderr="",
         )
     finally:
-        _restore_mathgr_state(state)
+        restore_state(state)
 
     return response.as_dict()
 
@@ -333,66 +341,6 @@ def _serialize_result(value: Any) -> str:
         except TypeError:
             pass
     return str(value)
-
-
-def _snapshot_mathgr_state() -> dict[str, Any]:
-    tensor_module = import_module("mathgr.tensor")
-    decomp_module = import_module("mathgr.decomp")
-    gr_module = import_module("mathgr.gr")
-    typeset_module = import_module("mathgr.typeset")
-    return {
-        "index_types": dict(tensor_module._INDEX_TYPES),
-        "constants": set(tensor_module._CONSTANTS),
-        "metrics": dict(tensor_module._METRICS),
-        "metric_heads": set(tensor_module._METRIC_HEADS),
-        "metric_index_pairs": {key: list(value) for key, value in tensor_module._METRIC_INDEX_PAIRS.items()},
-        "symmetries": {key: list(value) for key, value in tensor_module._SYMMETRIES.items()},
-        "uniq_counter_value": tensor_module._UNIQ_COUNTER_VALUE,
-        "idx_list": list(tensor_module.IdxList),
-        "idx_up_list": list(tensor_module.IdxUpList),
-        "idx_dn_list": list(tensor_module.IdxDnList),
-        "simp_hook": list(tensor_module.SimpHook),
-        "simp_into1": tuple(tensor_module.SimpInto1),
-        "simp_select": tensor_module.SimpSelect,
-        "decomp_hook": list(decomp_module.DecompHook),
-        "metric": gr_module.Metric,
-        "idx_of_metric": tuple(gr_module.IdxOfMetric),
-        "tex_hook": list(typeset_module.ToTeXHook),
-        "tex_template": typeset_module.ToTeXTemplate,
-    }
-
-
-def _restore_mathgr_state(state: dict[str, Any]) -> None:
-    tensor_module = import_module("mathgr.tensor")
-    decomp_module = import_module("mathgr.decomp")
-    gr_module = import_module("mathgr.gr")
-    typeset_module = import_module("mathgr.typeset")
-
-    tensor_module._INDEX_TYPES.clear()
-    tensor_module._INDEX_TYPES.update(state["index_types"])
-    tensor_module._CONSTANTS.clear()
-    tensor_module._CONSTANTS.update(state["constants"])
-    tensor_module._METRICS.clear()
-    tensor_module._METRICS.update(state["metrics"])
-    tensor_module._METRIC_HEADS.clear()
-    tensor_module._METRIC_HEADS.update(state["metric_heads"])
-    tensor_module._METRIC_INDEX_PAIRS.clear()
-    tensor_module._METRIC_INDEX_PAIRS.update({key: list(value) for key, value in state["metric_index_pairs"].items()})
-    tensor_module._SYMMETRIES.clear()
-    tensor_module._SYMMETRIES.update({key: list(value) for key, value in state["symmetries"].items()})
-    tensor_module._UNIQ_COUNTER_VALUE = state["uniq_counter_value"]
-
-    tensor_module.IdxList[:] = state["idx_list"]
-    tensor_module.IdxUpList[:] = state["idx_up_list"]
-    tensor_module.IdxDnList[:] = state["idx_dn_list"]
-    tensor_module.SimpHook[:] = state["simp_hook"]
-    tensor_module.SimpInto1 = state["simp_into1"]
-    tensor_module.SimpSelect = state["simp_select"]
-    decomp_module.DecompHook[:] = state["decomp_hook"]
-    gr_module.Metric = state["metric"]
-    gr_module.IdxOfMetric = state["idx_of_metric"]
-    typeset_module.ToTeXHook[:] = state["tex_hook"]
-    typeset_module.ToTeXTemplate = state["tex_template"]
 
 
 def create_mcp():

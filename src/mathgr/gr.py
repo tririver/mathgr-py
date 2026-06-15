@@ -13,8 +13,7 @@ from .tensor import (
     LatinIdx,
     Pd,
     Symmetric,
-    _restore_tensor_registry_state,
-    _snapshot_tensor_registry_state,
+    register_riemann_like,
     tensor,
     register_metric,
 )
@@ -125,6 +124,9 @@ class _CovDLowerRiemannAtom(sp.Expr):
         return f"CovDLowerRiemann({args})"
 
 
+register_riemann_like(_LowerRiemann)
+
+
 def UseMetric(metric, indices=(UP, DN), *, SetAsDefault=True):
     up, down = indices
     DeclareSym(metric, (up, up), Symmetric((1, 2)))
@@ -149,19 +151,17 @@ def WithMetric(metric, indices=(UP, DN), expr=None):
     else:
         callback = expr if callable(expr) else (lambda: expr)
 
+    from .state import restore_state, snapshot_state
+
     global Metric, IdxOfMetric
-    registry_state = _snapshot_tensor_registry_state()
-    previous_metric = Metric
-    previous_indices = IdxOfMetric
+    state = snapshot_state()
     try:
         UseMetric(metric, indices, SetAsDefault=False)
         Metric = metric
         IdxOfMetric = tuple(indices)
         return callback()
     finally:
-        Metric = previous_metric
-        IdxOfMetric = previous_indices
-        _restore_tensor_registry_state(registry_state)
+        restore_state(state)
 
 
 def MetricContract(expr):

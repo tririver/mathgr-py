@@ -1193,7 +1193,7 @@ that name a SymPy symbol for the call/context.
 
 `mathgr_capabilities` returns grouped public APIs.
 
-`mathgr_run_python(code, timeout_seconds=10.0)` and legacy `mathgr_eval` are
+`mathgr_run_python(code, timeout_seconds=180.0)` and legacy `mathgr_eval` are
 last-resort debugging escape hatches. They run a trusted snippet in a child
 process. The namespace preloads:
 
