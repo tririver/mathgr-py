@@ -1026,8 +1026,88 @@ Registered tools:
 ```text
 mathgr_capabilities
 mathgr_topic
+mathgr_manual
+mathgr_parse
+mathgr_compute
+mathgr_inspect
+mathgr_tex
+mathgr_context_create
+mathgr_context_update
+mathgr_context_get
+mathgr_context_clear
+mathgr_script
+mathgr_run_python
 mathgr_eval
 ```
+
+Agents should prefer structured tools over raw Python. The structured tools
+accept Python-like expression strings and auto-declare index families, tensor
+heads, and scalar symbols.
+
+Example:
+
+```text
+mathgr_compute("Simp(Dta(U('a'), D('b')) * f(U('b')))")
+```
+
+Auto declarations:
+
+```python
+Dim = sp.Symbol("Dim")
+U, D = declare_idx("U", "D", dim=Dim)
+f = tensor("f")
+```
+
+Dimension override:
+
+```json
+{"index_dims": {"U/D": 3}}
+```
+
+`mathgr_parse(expr, ...)`
+
+: Dry-run parser. Returns inferred index families, tensor heads, symbols,
+  diagnostics, and generated Python. Use this first when expression intent is
+  unclear.
+
+`mathgr_compute(expr, ...)`
+
+: Evaluates the Python-like MathGR expression exactly as written, with
+  auto-declared symbols, tensor heads, and index families. Put ordinary MathGR
+  calls directly in the expression:
+
+```python
+Simp(Dta(U('a'), D('b')) * f(U('b')))
+Simp(lhs - rhs)
+Decomp0i(f(DTot('a')) * f(UTot('a')))
+Ibp(y * Pd(x, D('i')))
+OO(2)((1 + Eps*x)**3)
+```
+
+`mathgr_inspect(expr, ...)`
+
+: Returns `idx`, `free`, `dummy`, tensor heads, derivative-node count, and
+  `Pm2` count.
+
+`mathgr_tex(expr, fragment=True, ...)`
+
+: Renders an expression to TeX.
+
+`mathgr_context_create`, `mathgr_context_update`, `mathgr_context_get`,
+`mathgr_context_clear`
+
+: Store reusable declarations and named expressions in the MCP server process.
+  Contexts store source strings and are re-evaluated with isolated MathGR global
+  state for each structured operation.
+
+`mathgr_script(expr_or_context, operation=None, ...)`
+
+: Exports reproducible Python for a structured calculation.
+
+`mathgr_manual(section=None, query=None)`
+
+: Reads this manual through MCP, so agents can discover usage after install even
+  when the repository files are not otherwise in context.
 
 `mathgr_capabilities` returns grouped public APIs.
 
@@ -1035,6 +1115,7 @@ mathgr_eval
 
 ```text
 quickstart
+ mcp
 tensor
 gr
 decomp
@@ -1043,8 +1124,8 @@ ibp
 typeset
 ```
 
-`mathgr_eval(code, timeout_seconds=10.0)` runs a trusted snippet in a child
-process. The namespace preloads:
+`mathgr_run_python(code, timeout_seconds=10.0)` and legacy `mathgr_eval` run a
+trusted snippet in a child process. The namespace preloads:
 
 ```python
 import sympy as sp
@@ -1069,7 +1150,8 @@ Eval limits:
 - imports are limited to `json`, `sympy`, `mathgr`, and MathGR submodules
 - MathGR global state is snapshotted and restored after each eval
 
-The eval tool is for trusted symbolic snippets. It is not a general Python
+Raw Python tools are escape hatches for workflows that structured tools cannot
+express. They are for trusted symbolic snippets and are not a general Python
 sandbox.
 
 See the repository `README.md` for Codex and Claude Code installation recipes.

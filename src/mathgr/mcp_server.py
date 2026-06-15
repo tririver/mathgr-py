@@ -14,6 +14,18 @@ from typing import Any
 import sympy as sp
 
 import mathgr
+from .mcp_structured import (
+    clear_mathgr_context,
+    compute_mathgr,
+    create_mathgr_context,
+    get_mathgr_context,
+    get_mathgr_manual,
+    inspect_mathgr,
+    parse_mathgr,
+    script_mathgr,
+    tex_mathgr,
+    update_mathgr_context,
+)
 
 
 SERVER_NAME = "mathgr"
@@ -113,6 +125,19 @@ CAPABILITIES = {
         "ToTeX",
         "DecorateTeXString",
     ],
+    "mcp_structured": [
+        "mathgr_manual",
+        "mathgr_parse",
+        "mathgr_compute",
+        "mathgr_inspect",
+        "mathgr_tex",
+        "mathgr_context_create",
+        "mathgr_context_update",
+        "mathgr_context_get",
+        "mathgr_context_clear",
+        "mathgr_script",
+        "mathgr_run_python",
+    ],
 }
 
 
@@ -125,6 +150,18 @@ Typical flow:
 3. Build expressions: `Dta(u("a"), d("b")) * f(u("b"))`.
 4. Simplify: `Simp(expr)`.
 Set `result = ...` in `mathgr_eval` to return a value.
+For most agent workflows prefer structured tools such as `mathgr_compute`,
+`mathgr_parse`, and `mathgr_inspect`; they auto-declare Python-like inputs.
+""",
+    "mcp": """\
+Structured MCP tools use Python-like expression strings with auto declarations.
+Example: `mathgr_compute("Simp(Dta(U('a'), D('b')) * f(U('b')))")`.
+Unknown index calls such as `U('a')`/`D('a')` declare `U,D` with symbolic
+dimension `Dim`; unknown tensor calls such as `f(U('a'))` declare tensor heads.
+Use `mathgr_parse` first to inspect generated Python, put ordinary MathGR calls
+such as `Simp`, `Decomp0i`, `Ibp`, or `OO(2)` inside `mathgr_compute`, use
+`mathgr_context_*` for reusable state, and `mathgr_run_python` only as an escape
+hatch.
 """,
     "tensor": """\
 Core tensor API:
@@ -438,8 +475,11 @@ def create_mcp():
     mcp = FastMCP(
         SERVER_NAME,
         instructions=(
-            "MathGR symbolic tensor/GR toolkit. Use mathgr_topic first for examples, "
-            "then mathgr_eval for small trusted calculations. Set `result = ...`."
+            "MathGR symbolic tensor/GR toolkit. Prefer structured tools: "
+            "mathgr_parse to inspect auto declarations, mathgr_compute to evaluate "
+            "Python-like MathGR expressions with explicit calls such as Simp/Ibp/OO, "
+            "mathgr_context_* for reusable state. Use mathgr_manual for docs. "
+            "Use mathgr_run_python only when structured tools cannot express the calculation."
         ),
     )
 
@@ -457,6 +497,187 @@ def create_mcp():
     def mathgr_eval(code: str, timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS) -> dict[str, str | bool]:
         """Run a trusted MathGR snippet and return result/stdout/stderr."""
         return evaluate_mathgr(code, timeout_seconds=timeout_seconds)
+
+    @mcp.tool()
+    def mathgr_run_python(code: str, timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS) -> dict[str, str | bool]:
+        """Escape hatch: run a trusted MathGR Python snippet; prefer structured tools first."""
+        return evaluate_mathgr(code, timeout_seconds=timeout_seconds)
+
+    @mcp.tool()
+    def mathgr_manual(section: str | None = None, query: str | None = None) -> dict[str, Any]:
+        """Read the MathGR manual or a named section/query snippet."""
+        return get_mathgr_manual(section=section, query=query)
+
+    @mcp.tool()
+    def mathgr_parse(
+        expr: str,
+        context: str | None = None,
+        auto_declare: bool = True,
+        declarations: dict[str, Any] | None = None,
+        index_dims: dict[str, Any] | None = None,
+        index_sets: dict[str, str] | None = None,
+        tensors: list[str] | None = None,
+        symbols: list[str] | None = None,
+        metric: dict[str, Any] | None = None,
+        symmetries: list[dict[str, Any]] | None = None,
+        output: list[str] | None = None,
+        timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+    ) -> dict[str, Any]:
+        """Dry-run a Python-like MathGR expression and return inferred declarations/Python."""
+        return parse_mathgr(
+            expr,
+            context=context,
+            auto_declare=auto_declare,
+            declarations=declarations,
+            index_dims=index_dims,
+            index_sets=index_sets,
+            tensors=tensors,
+            symbols=symbols,
+            metric=metric,
+            symmetries=symmetries,
+            output=output,
+            timeout_seconds=timeout_seconds,
+        )
+
+    @mcp.tool()
+    def mathgr_compute(
+        expr: str,
+        context: str | None = None,
+        auto_declare: bool = True,
+        declarations: dict[str, Any] | None = None,
+        index_dims: dict[str, Any] | None = None,
+        index_sets: dict[str, str] | None = None,
+        tensors: list[str] | None = None,
+        symbols: list[str] | None = None,
+        metric: dict[str, Any] | None = None,
+        symmetries: list[dict[str, Any]] | None = None,
+        output: list[str] | None = None,
+        store_as: str | None = None,
+        timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+    ) -> dict[str, Any]:
+        """Auto-declare and evaluate a Python-like MathGR expression; call Simp/Ibp/etc. explicitly."""
+        return compute_mathgr(
+            expr,
+            context=context,
+            auto_declare=auto_declare,
+            declarations=declarations,
+            index_dims=index_dims,
+            index_sets=index_sets,
+            tensors=tensors,
+            symbols=symbols,
+            metric=metric,
+            symmetries=symmetries,
+            output=output,
+            store_as=store_as,
+            timeout_seconds=timeout_seconds,
+        )
+
+    @mcp.tool()
+    def mathgr_inspect(
+        expr: str,
+        context: str | None = None,
+        auto_declare: bool = True,
+        declarations: dict[str, Any] | None = None,
+        index_dims: dict[str, Any] | None = None,
+        index_sets: dict[str, str] | None = None,
+        tensors: list[str] | None = None,
+        symbols: list[str] | None = None,
+        metric: dict[str, Any] | None = None,
+        symmetries: list[dict[str, Any]] | None = None,
+        output: list[str] | None = None,
+        timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+    ) -> dict[str, Any]:
+        """Inspect indices, tensor heads, derivative nodes, and Pm2 nodes."""
+        return inspect_mathgr(
+            expr,
+            context=context,
+            auto_declare=auto_declare,
+            declarations=declarations,
+            index_dims=index_dims,
+            index_sets=index_sets,
+            tensors=tensors,
+            symbols=symbols,
+            metric=metric,
+            symmetries=symmetries,
+            output=output,
+            timeout_seconds=timeout_seconds,
+        )
+
+    @mcp.tool()
+    def mathgr_tex(
+        expr: str,
+        fragment: bool = True,
+        context: str | None = None,
+        auto_declare: bool = True,
+        declarations: dict[str, Any] | None = None,
+        index_dims: dict[str, Any] | None = None,
+        output: list[str] | None = None,
+        timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+    ) -> dict[str, Any]:
+        """Render an expression to TeX."""
+        return tex_mathgr(
+            expr,
+            fragment=fragment,
+            context=context,
+            auto_declare=auto_declare,
+            declarations=declarations,
+            index_dims=index_dims,
+            output=output,
+            timeout_seconds=timeout_seconds,
+        )
+
+    @mcp.tool()
+    def mathgr_context_create(name: str | None = None, defaults: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Create a reusable MathGR context for declarations and named expressions."""
+        return create_mathgr_context(name=name, defaults=defaults)
+
+    @mcp.tool()
+    def mathgr_context_update(
+        context: str,
+        declarations: dict[str, Any] | None = None,
+        expressions: dict[str, str] | None = None,
+        metric: dict[str, Any] | None = None,
+        symmetries: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        """Add declarations, metric/symmetry data, or named expressions to a context."""
+        return update_mathgr_context(
+            context,
+            declarations=declarations,
+            expressions=expressions,
+            metric=metric,
+            symmetries=symmetries,
+        )
+
+    @mcp.tool()
+    def mathgr_context_get(
+        context: str,
+        name: str | None = None,
+        output: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Fetch a context summary or one stored expression."""
+        return get_mathgr_context(context, name=name, output=output)
+
+    @mcp.tool()
+    def mathgr_context_clear(context: str) -> dict[str, Any]:
+        """Clear a named MathGR context."""
+        return clear_mathgr_context(context)
+
+    @mcp.tool()
+    def mathgr_script(
+        expr_or_context: str | None = None,
+        operation: str | None = None,
+        context: str | None = None,
+        declarations: dict[str, Any] | None = None,
+        index_dims: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Export reproducible Python for an expression operation or context."""
+        return script_mathgr(
+            expr_or_context,
+            operation=operation,
+            context=context,
+            declarations=declarations,
+            index_dims=index_dims,
+        )
 
     return mcp
 

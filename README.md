@@ -326,13 +326,47 @@ the repo is trusted.
 
 Available MCP tools:
 
-- `mathgr_capabilities`: grouped public API names
-- `mathgr_topic`: quick reference for `quickstart`, `tensor`, `gr`, `decomp`,
-  `perturbation`, `ibp`, or `typeset`
-- `mathgr_eval`: run a small trusted MathGR snippet; set `result = ...` to
-  return a value. Optional `timeout_seconds` defaults to 10 seconds.
+- `mathgr_manual`: read the full manual or a named section
+- `mathgr_parse`: dry-run a Python-like expression and show inferred
+  declarations plus reproducible Python
+- `mathgr_compute`: auto-declare and evaluate a Python-like MathGR expression;
+  call `Simp`, `Decomp0i`, `Ibp`, `OO`, and other MathGR functions explicitly
+- `mathgr_inspect`: list indices, free/dummy labels, tensor heads, derivative
+  nodes, and `Pm2` nodes
+- `mathgr_tex`: render an expression to TeX
+- `mathgr_context_create`, `mathgr_context_update`, `mathgr_context_get`,
+  `mathgr_context_clear`: keep reusable declarations and named expressions in
+  the MCP server process
+- `mathgr_script`: export reproducible Python for a structured calculation
+- `mathgr_capabilities` and `mathgr_topic`: compact API reference
+- `mathgr_run_python` / `mathgr_eval`: raw trusted Python escape hatch
 
-Example `mathgr_eval` code:
+Prefer structured tools. They accept Python-like expression strings and
+auto-declare common objects. For example:
+
+```text
+mathgr_compute("Simp(Dta(U('a'), D('b')) * f(U('b')))")
+```
+
+The MCP server infers:
+
+```python
+Dim = sp.Symbol("Dim")
+U, D = declare_idx("U", "D", dim=Dim)
+f = tensor("f")
+```
+
+Override dimensions when needed:
+
+```json
+{"index_dims": {"U/D": 3}}
+```
+
+Use `mathgr_parse` when unsure; it returns the generated Python without running
+a calculation. Use `mathgr_compute` for identities by putting `Simp(lhs - rhs)`
+in the expression and checking whether the result is `0`.
+
+Example raw `mathgr_run_python` code:
 
 ```python
 f = tensor("f")
@@ -340,8 +374,8 @@ expr = Dta(UP("a"), DN("b")) * f(UP("b"))
 result = Simp(expr)
 ```
 
-Security note: `mathgr_eval` is intended for trusted symbolic snippets from the
-agent session, not as a sandbox for hostile code. It runs snippets in a child
-process with a timeout, restores MathGR global state after each call, and blocks
-common filesystem/shell/import paths, but Python execution is not a security
-boundary.
+Security note: raw Python tools are intended for trusted symbolic snippets from
+the agent session, not as a sandbox for hostile code. They run snippets in a
+child process with a timeout, restore MathGR global state after each call, and
+block common filesystem/shell/import paths, but Python execution is not a
+security boundary.
