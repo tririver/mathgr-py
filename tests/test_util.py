@@ -165,6 +165,13 @@ def test_treplace_replaces_tensor_factors_and_preserves_raw_dummy_power_labels()
     assert util.TReplace(x + y, {x: 2 * y}) == 3 * y
 
 
+def test_treplace_replaces_powers_of_derivative_atoms():
+    phi0, A, B = sp.symbols("phi0 A B")
+    derivative = Pd(phi0, mathgr.DE(0))
+
+    assert util.TReplace(3 * derivative**2 + derivative**4, {derivative**2: A, derivative**4: B}) == 3 * A + B
+
+
 def test_treplace_supports_sympy_wild_index_patterns_like_mathematica_rules():
     f = tensor("fTReplacePattern")
     g = tensor("gTReplacePattern")

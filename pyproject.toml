@@ -15,6 +15,7 @@ mathgr-mcp = "mathgr.mcp_server:main"
 [dependency-groups]
 dev = [
     "pytest>=8.0",
+    "pytest-xdist>=3.8.0",
 ]
 
 [build-system]
@@ -28,6 +29,6 @@ packages = ["src/mathgr"]
 testpaths = ["tests"]
 pythonpath = ["src", "."]
 markers = [
-    "slow: full symbolic example ports",
+    "slow: expensive symbolic regressions and full example ports",
     "wolfram: requires WolframScript oracle",
 ]

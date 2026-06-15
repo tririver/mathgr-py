@@ -1,4 +1,5 @@
 import sympy as sp
+import pytest
 
 import mathgr
 import mathgr.gr as gr_module
@@ -234,6 +235,7 @@ def test_total_metric_evaluates_on_decomposed_dual_pairs_only_like_upstream():
         UseMetric(previous_metric, previous_indices)
 
 
+@pytest.mark.slow
 def test_decompse_non_diagonal_metric_derivative_hooks_simplify_curvature_path():
     metric = tensor("metricNonDiagonalDecomp")
     eta = tensor("etaNonDiagonalDecomp")
@@ -341,6 +343,7 @@ def test_simp_cancels_non_diagonal_metric_second_derivative_block():
     assert Simp(block) == 0
 
 
+@pytest.mark.slow
 def test_decompse_full_non_diagonal_metric_reduces_to_maxwell_form():
     metric = tensor("metricNonDiagonalMaxwell")
     eta = tensor("etaNonDiagonalMaxwell")

@@ -67,7 +67,8 @@ def TReplace(expr_or_rule, rule=None):
     if rule is None:
         return lambda expr: TReplace(expr, expr_or_rule)
     replacements = _coerce_replacements(rule)
-    protected = times2prod(expr_or_rule)
+    raw_replaced = _replace_until_stable(expr_or_rule, replacements)
+    protected = times2prod(raw_replaced)
     mapped = _map_replacements_over_products(protected, replacements)
     replaced = _replace_until_stable(mapped, replacements)
     return prod2times(replaced)

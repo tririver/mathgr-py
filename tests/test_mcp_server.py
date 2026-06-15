@@ -22,7 +22,7 @@ from mathgr.mcp_server import (
     script_mathgr,
     tex_mathgr,
 )
-from mathgr.mcp_structured import simplify_mathgr
+from mathgr.mcp_structured import create_mathgr_context, simplify_mathgr, update_mathgr_context
 
 
 def test_list_mathgr_capabilities_groups_public_api_for_agents():
@@ -140,6 +140,30 @@ def test_compute_mathgr_uses_auto_declarations_and_explicit_simp_call():
     assert trace["result"] == "Dim"
 
 
+def test_compute_mathgr_accepts_restricted_lambda_hooks():
+    result = compute_mathgr("Simp(x, hooks=[lambda e: e.xreplace({x: y})])")
+
+    assert result["ok"] is True
+    assert result["result"] == "y"
+
+
+def test_compute_mathgr_explicit_symbols_override_preloaded_names():
+    result = compute_mathgr(
+        "a**3 / k**2 + H",
+        context="mcp_symbol_override",
+        symbols=["a", "H", "k"],
+        output=["str"],
+    )
+    momentum = compute_mathgr("k(1)(DN('i'))", context="mcp_momentum_no_override", output=["str"])
+    clear_mathgr_context("mcp_symbol_override")
+    clear_mathgr_context("mcp_momentum_no_override")
+
+    assert result["ok"] is True
+    assert result["result"] == "H + a**3/k**2"
+    assert momentum["ok"] is True
+    assert momentum["result"] == "k(1, DN('i'))"
+
+
 def test_compute_mathgr_auto_creates_default_context_and_persists_block_assignments():
     clear_mathgr_context("default")
 
@@ -165,8 +189,24 @@ result = trace
     assert rendered["tex"] == "f^{a}"
     assert fetched["expressions"]["trace"] == "Dta(U('a'), D('a'))"
     assert fetched["expressions"]["simplified"] == "Simp(Dta(U('a'), D('b')) * f(U('b')))"
+    assert "result" not in fetched["expressions"]
     assert filtered["expressions"] == {"trace": "Dta(U('a'), D('a'))"}
     assert cleared["ok"] is True
+
+
+def test_compute_mathgr_rehydrates_requested_context_expression_without_stale_result_dependency():
+    clear_mathgr_context("mcp_stale_result")
+    create_mathgr_context("mcp_stale_result")
+    update_mathgr_context(
+        "mcp_stale_result",
+        expressions={"result": "L2_raw", "L2_raw": "x + 1"},
+    )
+
+    result = compute_mathgr("L2_raw", context="mcp_stale_result", output=["str", "diagnostics"])
+    clear_mathgr_context("mcp_stale_result")
+
+    assert result["ok"] is True
+    assert result["result"] == "x + 1"
 
 
 def test_compute_mathgr_auto_creates_named_context_and_persists_params():
@@ -269,6 +309,26 @@ result = trace
     assert saved_json["context"] == "mcp_save_ctx"
 
 
+def test_script_mathgr_context_exports_stored_expressions():
+    clear_mathgr_context("mcp_script_context")
+    compute_mathgr(
+        """
+trace = Dta(U('a'), D('a'))
+simplified = Simp(trace)
+result = simplified
+""",
+        context="mcp_script_context",
+    )
+
+    script = script_mathgr(context="mcp_script_context")
+    clear_mathgr_context("mcp_script_context")
+
+    assert script["ok"] is True
+    assert "trace = Dta(U('a'), D('a'))" in script["python"]
+    assert "simplified = Simp(trace)" in script["python"]
+    assert "result =" not in script["python"]
+
+
 def test_compute_mathgr_rejects_unsafe_block_syntax():
     imported = compute_mathgr("import os\nresult = 1", context="mcp_unsafe")
     looped = compute_mathgr("for value in [1]:\n    result = value", context="mcp_unsafe")
@@ -327,6 +387,14 @@ def test_compute_mathgr_runs_ordinary_mathgr_functions_and_tex_script_helpers():
     assert manual["ok"] is True
     assert "mathgr_compute" in manual["content"]
     assert "first-choice tool" in manual["content"]
+
+
+def test_get_mathgr_manual_query_returns_partial_matches_instead_of_empty_content():
+    manual = get_mathgr_manual(query="lambda hooks")
+
+    assert manual["ok"] is True
+    assert manual["content"]
+    assert "hooks" in manual["content"].lower()
 
 
 def test_compute_mathgr_supports_custom_expansion_symbol_directly():

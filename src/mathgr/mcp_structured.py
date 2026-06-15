@@ -101,6 +101,28 @@ _BLOCKED_CALL_NAMES = {
 }
 
 
+class _ContextDependencyScanner(ast.NodeVisitor):
+    def __init__(self, context_names: set[str]):
+        self.context_names = context_names
+        self.dependencies: set[str] = set()
+        self._bound_names: list[set[str]] = []
+
+    def visit_Name(self, node: ast.Name) -> Any:
+        if isinstance(node.ctx, ast.Load) and node.id in self.context_names and not self._is_bound_name(node.id):
+            self.dependencies.add(node.id)
+
+    def visit_Lambda(self, node: ast.Lambda) -> Any:
+        bound = {arg.arg for arg in (*node.args.posonlyargs, *node.args.args)}
+        self._bound_names.append(bound)
+        try:
+            self.visit(node.body)
+        finally:
+            self._bound_names.pop()
+
+    def _is_bound_name(self, name: str) -> bool:
+        return any(name in names for names in reversed(self._bound_names))
+
+
 @dataclass(frozen=True)
 class _Prepared:
     namespace: dict[str, Any]
@@ -132,12 +154,15 @@ class _ExpressionScanner(ast.NodeVisitor):
         self.tensor_names: set[str] = set()
         self.bare_names: set[str] = set()
         self._call_func_stack: list[str] = []
+        self._bound_names: list[set[str]] = []
 
     def visit_Call(self, node: ast.Call) -> Any:
         func_name = node.func.id if isinstance(node.func, ast.Name) else None
         if func_name is not None:
             self.call_names.add(func_name)
-            if self._looks_like_index_call(func_name, node):
+            if self._is_bound_name(func_name):
+                pass
+            elif self._looks_like_index_call(func_name, node):
                 self.index_names.add(func_name)
             elif func_name not in self.known_names and func_name not in self.context_names:
                 self.tensor_names.add(func_name)
@@ -154,8 +179,21 @@ class _ExpressionScanner(ast.NodeVisitor):
     def visit_Name(self, node: ast.Name) -> Any:
         if self._call_func_stack and self._call_func_stack[-1] == node.id:
             return
+        if self._is_bound_name(node.id):
+            return
         if node.id not in self.known_names and node.id not in self.context_names:
             self.bare_names.add(node.id)
+
+    def visit_Lambda(self, node: ast.Lambda) -> Any:
+        bound = {arg.arg for arg in (*node.args.posonlyargs, *node.args.args)}
+        self._bound_names.append(bound)
+        try:
+            self.visit(node.body)
+        finally:
+            self._bound_names.pop()
+
+    def _is_bound_name(self, name: str) -> bool:
+        return any(name in names for names in reversed(self._bound_names))
 
     def _looks_like_index_call(self, name: str, node: ast.Call) -> bool:
         if name in self.known_names or name in self.context_names:
@@ -835,7 +873,8 @@ def _prepare_runtime(
     if auto_declare:
         tensor_names.update(scanner.tensor_names)
 
-    symbol_names = set(merged.get("symbols", ()))
+    explicit_symbol_names = set(merged.get("symbols", ()))
+    symbol_names = set(explicit_symbol_names)
     if auto_declare:
         symbol_names.update(scanner.bare_names)
 
@@ -874,7 +913,7 @@ def _prepare_runtime(
         python_prefix.append(f"{name} = tensor('{name}')")
 
     for name in sorted(symbol_names):
-        if name not in namespace:
+        if name in explicit_symbol_names or name not in namespace:
             namespace[name] = sp.Symbol(name)
             auto_symbols.add(name)
             python_prefix.append(f"{name} = sp.Symbol('{name}')")
@@ -883,7 +922,8 @@ def _prepare_runtime(
     _apply_metric_declaration(namespace, python_prefix, merged.get("metric"))
     _apply_symmetry_declarations(namespace, python_prefix, merged.get("symmetries", ()))
 
-    for name, expression in context_exprs.items():
+    for name in _context_eval_order(exprs, context_exprs):
+        expression = context_exprs[name]
         namespace[name] = _eval_expr(expression, namespace)
         python_prefix.append(f"{name} = {expression}")
 
@@ -897,6 +937,50 @@ def _prepare_runtime(
         python_prefix=python_prefix,
         diagnostics=diagnostics,
     )
+
+
+def _context_eval_order(exprs: list[str], context_exprs: dict[str, str]) -> list[str]:
+    roots: list[str] = []
+    if not exprs:
+        roots.extend(context_exprs)
+    else:
+        for expr in exprs:
+            roots.extend(_context_dependencies(expr, context_exprs))
+            expr_name = str(expr).strip()
+            if expr_name in context_exprs:
+                roots.append(expr_name)
+
+    order: list[str] = []
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def visit(name: str) -> None:
+        if name in visited:
+            return
+        if name in visiting:
+            raise ValueError(f"Cyclic MathGR context expression dependency involving {name!r}.")
+        if name not in context_exprs:
+            return
+        visiting.add(name)
+        for dependency in _context_dependencies(context_exprs[name], context_exprs):
+            visit(dependency)
+        visiting.remove(name)
+        visited.add(name)
+        order.append(name)
+
+    for root in roots:
+        visit(root)
+    return order
+
+
+def _context_dependencies(expr: str, context_exprs: dict[str, str]) -> list[str]:
+    try:
+        tree = _parse_safe_expr(expr)
+    except SyntaxError:
+        return []
+    scanner = _ContextDependencyScanner(set(context_exprs))
+    scanner.visit(tree)
+    return [name for name in context_exprs if name in scanner.dependencies]
 
 
 def _base_namespace() -> dict[str, Any]:
@@ -939,6 +1023,9 @@ def _validate_safe_expr_tree(tree: ast.AST) -> None:
                 ast.List,
                 ast.Dict,
                 ast.keyword,
+                ast.Lambda,
+                ast.arguments,
+                ast.arg,
                 ast.Add,
                 ast.Sub,
                 ast.Mult,
@@ -950,6 +1037,8 @@ def _validate_safe_expr_tree(tree: ast.AST) -> None:
                 ast.Attribute,
             ),
         ):
+            if isinstance(node, ast.Lambda) and not _safe_lambda(node):
+                raise ValueError("Only simple expression lambdas are allowed in MCP expressions.")
             if isinstance(node, ast.Attribute) and not _safe_attribute(node):
                 raise ValueError(
                     "Only safe module attributes and expression methods are allowed in MCP expressions."
@@ -958,6 +1047,17 @@ def _validate_safe_expr_tree(tree: ast.AST) -> None:
                 raise ValueError(f"Call {node.func.id!r} is not available in MCP expressions.")
             continue
         raise ValueError(f"Unsupported syntax in MCP expression: {type(node).__name__}")
+
+
+def _safe_lambda(node: ast.Lambda) -> bool:
+    args = node.args
+    return not (
+        args.vararg
+        or args.kwarg
+        or args.kwonlyargs
+        or args.defaults
+        or args.kw_defaults
+    )
 
 
 def _safe_attribute(node: ast.Attribute) -> bool:
@@ -974,7 +1074,9 @@ def _blocked_call(node: ast.Call) -> bool:
 
 def _eval_expr(expr: str, namespace: dict[str, Any]):
     tree = _parse_safe_expr(expr)
-    return eval(compile(tree, "<mathgr-mcp-expr>", "eval"), {"__builtins__": {}}, namespace)
+    globals_namespace = dict(namespace)
+    globals_namespace["__builtins__"] = {}
+    return eval(compile(tree, "<mathgr-mcp-expr>", "eval"), globals_namespace, globals_namespace)
 
 
 def _parse_compute_block(source: str) -> _ComputeBlock | None:
@@ -1061,6 +1163,8 @@ def _eval_block(block: _ComputeBlock, namespace: dict[str, Any], context: str) -
                 namespace["_"] = _eval_expr(expr_source, namespace)
 
     for assignment in pending_expressions:
+        if assignment.name == "result":
+            continue
         _store_expression(context, assignment.name, assignment.source)
     if any(assignment.name == "result" for assignment in pending_expressions):
         return namespace["result"]
@@ -1561,11 +1665,13 @@ def _select_query_lines(content: str, query: str) -> str:
     matches = []
     for pos, line in enumerate(lines):
         lower = line.lower()
-        if all(term in lower for term in terms):
+        if any(term in lower for term in terms):
             start = max(0, pos - 2)
             end = min(len(lines), pos + 3)
             matches.extend(lines[start:end] + [""])
-    return "\n".join(matches).strip() + "\n" if matches else ""
+    if matches:
+        return "\n".join(matches).strip() + "\n"
+    return f"No manual lines matched query: {query}\n"
 
 
 def _fallback_manual_text() -> str:

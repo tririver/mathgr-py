@@ -229,6 +229,16 @@ out of the upload:
 git archive --format=zip --output mathgr-py-src.zip HEAD
 ```
 
+Default local test workflow:
+
+```bash
+tools/test.sh
+```
+
+This runs fast tests serially, then the slow symbolic bucket with
+`pytest-xdist`; override workers with `PYTEST_SLOW_WORKERS=8 tools/test.sh`.
+Use `uv run pytest -q` only when you want the full serial release check.
+
 ## MCP Interface
 
 Use the MCP interface when you want a coding agent to call MathGR directly after
@@ -351,6 +361,9 @@ mathgr_compute("trace")
 mathgr_context_get()
 ```
 
+`result = ...` controls the returned value but is not persisted as context
+state. Use a regular assignment, or `store_as`, for durable values.
+
 Top-level declarations persist too:
 
 ```text
@@ -362,6 +375,12 @@ DeclareSym(F, (D, D), Antisymmetric((1, 2)))
 result = Simp(F(D('a'), D('a')))
 """)
 ```
+
+Compute blocks intentionally reject imports, loops, function/class definitions,
+`with`, private attributes, and unsafe builtins. Restricted expression-only
+lambdas are allowed for local hooks and callbacks. If a scalar name collides
+with a preloaded API name, pass `symbols=[...]` to make that name a SymPy symbol
+for the call/context.
 
 Context files survive agent restarts:
 

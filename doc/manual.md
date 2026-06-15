@@ -33,11 +33,15 @@ Install editable into another environment:
 python -m pip install -e .
 ```
 
-Run tests:
+Run the default local test workflow: fast tests serial, slow symbolic bucket in
+parallel.
 
 ```bash
-uv run pytest -q
+tools/test.sh
 ```
+
+Override slow-test workers with `PYTEST_SLOW_WORKERS=8 tools/test.sh`.
+Use `uv run pytest -q` for a full serial release check.
 
 Run the MCP server:
 
@@ -1099,6 +1103,9 @@ mathgr_compute("simplified")
 mathgr_context_get()
 ```
 
+`result = ...` controls the returned value but is not persisted as context
+state. Use a regular assignment, or `store_as`, for durable values.
+
 Named contexts are auto-created on first use:
 
 ```python
@@ -1129,6 +1136,9 @@ result = Simp(F(D('a'), D('a')))
 Compute blocks intentionally reject imports, loops, function/class definitions,
 `with`, private attributes, and unsafe builtins. Module aliases such as `sp`,
 `mathgr`, `adm`, `frwadm`, `gr`, `decomp`, and `typeset` are already preloaded.
+Restricted expression-only lambdas are allowed for local hooks and callbacks.
+If a scalar name collides with a preloaded API name, pass `symbols=[...]` to make
+that name a SymPy symbol for the call/context.
 
 `mathgr_inspect(expr, ...)`
 
