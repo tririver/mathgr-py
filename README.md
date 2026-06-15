@@ -7,13 +7,14 @@ series, integration by parts, and TeX export.
 
 The package has two user-facing interfaces:
 
+- Python interface: normal Python/SymPy API for scripts, notebooks, tests, and
+  direct human use.
 - MCP interface: designed for Codex, Claude Code, and other coding agents. It
   accepts Python-like expression strings, auto-declares tensors and indices, and
   exposes tools such as `mathgr_compute`, `mathgr_parse`, and `mathgr_tex`.
-- Python interface: normal Python/SymPy API for scripts, notebooks, tests, and
-  direct human use.
+  Example agent call: `mathgr_compute("Simp(Dta(U('a'), D('b')) * f(U('b')))")`.
 
-Wolfram is not needed at runtime. The test suite translates upstream MathGR
+Wolfram is not needed. The test suite translates upstream MathGR
 tests and notebook cells to pytest, with an optional Wolfram oracle test for
 checking the original package.
 
@@ -24,117 +25,6 @@ exists because Python is easier for AI coding agents to inspect, run, test,
 modify, and expose through MCP tools. The initial motivation was better agent
 interaction with MathGR; it is also useful for humans who prefer a Python/SymPy
 workflow.
-
-## MCP Interface
-
-Use the MCP interface when you want a coding agent to call MathGR directly after
-startup. The MCP surface is intentionally different from raw Python: agents send
-Python-like expression strings and the server auto-declares common objects.
-
-### MCP Install
-
-For Codex or Claude Code, you usually do not need to install the MCP server by
-hand. Start your agent in this repository and ask:
-
-```text
-Read the Agent MCP Install Recipe at the end of README.md and install MathGR MCP
-for your own future sessions.
-```
-
-The agent should follow that recipe, update its own MCP configuration, then tell
-you to start a new Codex or Claude Code session. New sessions can call the
-`mathgr` MCP tools immediately.
-
-Manual smoke check from this repository:
-
-```bash
-uv sync
-timeout 2s uv run mathgr-mcp
-```
-
-Exit code `0` or `124` from `timeout` is acceptable. A Python traceback is not.
-
-### MCP Usage
-
-Core tools:
-
-- `mathgr_manual`: read the full manual or a named section
-- `mathgr_compute`: first-choice tool for almost all MathGR calculations;
-  auto-declare and evaluate a Python-like MathGR expression
-- `mathgr_tex`: render an expression to TeX
-- `mathgr_context_create`, `mathgr_context_update`, `mathgr_context_get`,
-  `mathgr_context_clear`: keep reusable declarations and named expressions in
-  the MCP server process
-- `mathgr_parse`: only for debugging; dry-run a Python-like expression and show
-  inferred declarations plus reproducible Python
-- `mathgr_inspect`: only for debugging; list indices, free/dummy labels, tensor
-  heads, derivative nodes, and `Pm2` nodes
-- `mathgr_script`: only for debugging/reproduction; export Python for a
-  structured calculation
-- `mathgr_capabilities`: compact API group list
-- `mathgr_run_python` / `mathgr_eval`: last-resort debugging escape hatch for
-  raw trusted Python
-
-Agents should use `mathgr_compute` first for almost every calculation. The
-compute tool is easier than raw Python because it auto-declares index families,
-tensor heads, and scalar symbols. Use `mathgr_parse`, `mathgr_inspect`, and
-`mathgr_script` only for debugging. Use `mathgr_run_python` / `mathgr_eval` only
-when `mathgr_compute` cannot express the workflow.
-
-Example:
-
-```text
-mathgr_compute("Simp(Dta(U('a'), D('b')) * f(U('b')))")
-```
-
-The MCP server infers:
-
-```python
-Dim = sp.Symbol("Dim")
-U, D = declare_idx("U", "D", dim=Dim)
-f = tensor("f")
-```
-
-Typical MCP calls:
-
-```text
-mathgr_compute("Simp(Dta(U('a'), D('b')) * f(U('b')))")
-mathgr_compute("Decomp0i(f(DTot('a')) * f(UTot('a')))")
-mathgr_compute("Ibp(y * Pd(x, D('i')))")
-mathgr_compute("OO(2)((1 + Eps*x)**3)")
-mathgr_compute("Simp(lhs - rhs)")
-mathgr_tex("Pd(f(U('a')), D('i'))")
-```
-
-Override dimensions when needed:
-
-```json
-{"index_dims": {"U/D": 3}}
-```
-
-Use contexts for multi-step calculations:
-
-```text
-mathgr_context_create("demo")
-mathgr_context_update(
-  "demo",
-  declarations={"index_dims": {"U/D": 3}},
-  expressions={"trace": "Dta(U('a'), D('a'))"}
-)
-mathgr_compute("trace", context="demo")
-```
-
-Result:
-
-```text
-3
-```
-
-Security note: raw Python tools are intended for trusted symbolic snippets from
-the agent session, not as a sandbox for hostile code. They run snippets in a
-child process with a timeout, restore MathGR global state after each call, and
-block common filesystem/shell/import paths, but Python execution is not a
-security boundary.
 
 ## Python Interface
 
@@ -322,6 +212,153 @@ Larger notebook ports may be expensive if you enable full action computation.
 Many expose flags such as `main(compute_action=False)`.
 
 See [doc/manual.md](doc/manual.md) for a more complete API manual.
+
+## MCP Interface
+
+Use the MCP interface when you want a coding agent to call MathGR directly after
+startup. The MCP surface is intentionally different from raw Python: agents send
+Python-like expression strings and the server auto-declares common objects.
+
+### MCP Install
+
+For Codex or Claude Code, you usually do not need to install the MCP server by
+hand. Start your agent in this repository and ask:
+
+```text
+Read the Agent MCP Install Recipe at the end of README.md and install MathGR MCP
+for your own future sessions.
+```
+
+The agent should follow that recipe, update its own MCP configuration, then tell
+you to start a new Codex or Claude Code session. New sessions can call the
+`mathgr` MCP tools immediately.
+
+Manual smoke check from this repository:
+
+```bash
+uv sync
+timeout 2s uv run mathgr-mcp
+```
+
+Exit code `0` or `124` from `timeout` is acceptable. A Python traceback is not.
+
+### MCP Usage
+
+Core tools:
+
+- `mathgr_manual`: read the full manual or a named section
+- `mathgr_compute`: first-choice tool for almost all MathGR calculations;
+  auto-declare and evaluate a Python-like expression or notebook block
+- `mathgr_tex`: render an expression to TeX
+- `mathgr_context_get`: list stored context declarations and expression source
+  definitions
+- `mathgr_context_clear`: reset the default or named context
+- `mathgr_context_save`, `mathgr_context_load`: save/load context JSON files
+- `mathgr_parse`: only for debugging; dry-run a Python-like expression and show
+  inferred declarations plus reproducible Python
+- `mathgr_inspect`: only for debugging; list indices, free/dummy labels, tensor
+  heads, derivative nodes, and `Pm2` nodes
+- `mathgr_script`: only for debugging/reproduction; export Python for a
+  structured calculation
+- `mathgr_capabilities`: compact API group list
+- `mathgr_run_python` / `mathgr_eval`: last-resort debugging escape hatch for
+  raw trusted Python
+
+Agents should use `mathgr_compute` first for almost every calculation. The
+compute tool is easier than raw Python because it auto-declares index families,
+tensor heads, scalar symbols, and a persistent default context. Use multi-line
+`mathgr_compute` blocks for setup work; use `mathgr_parse`, `mathgr_inspect`,
+and `mathgr_script` only for debugging. Use `mathgr_run_python` /
+`mathgr_eval` only when `mathgr_compute` cannot express the workflow.
+
+Example:
+
+```text
+mathgr_compute("Simp(Dta(U('a'), D('b')) * f(U('b')))")
+```
+
+The MCP server infers:
+
+```python
+Dim = sp.Symbol("Dim")
+U, D = declare_idx("U", "D", dim=Dim)
+f = tensor("f")
+```
+
+Typical MCP calls:
+
+```text
+mathgr_compute("Simp(Dta(U('a'), D('b')) * f(U('b')))")
+mathgr_compute("Decomp0i(f(DTot('a')) * f(UTot('a')))")
+mathgr_compute("Ibp(y * Pd(x, D('i')))")
+mathgr_compute("OO(2)((1 + Eps*x)**3)")
+mathgr_compute("Simp(lhs - rhs)")
+mathgr_tex("Pd(f(U('a')), D('i'))")
+```
+
+Override dimensions when needed:
+
+```json
+{"index_dims": {"U/D": 3}}
+```
+
+Use contexts for multi-step calculations:
+
+```text
+mathgr_compute(
+  """
+trace = Dta(U('a'), D('a'))
+simplified = Simp(Dta(U('a'), D('b')) * f(U('b')))
+result = trace
+  """,
+  context="demo",
+  index_dims={"U/D": 3}
+)
+mathgr_compute("trace", context="demo")
+```
+
+Result:
+
+```text
+3
+```
+
+If `context` is omitted, `mathgr_compute` uses and auto-creates `"default"`.
+Assignments in a compute block persist in that context:
+
+```text
+mathgr_compute("""
+trace = Dta(U('a'), D('a'))
+result = Simp(trace)
+""")
+mathgr_compute("trace")
+mathgr_context_get()
+```
+
+Top-level declarations persist too:
+
+```text
+mathgr_compute("""
+gMcp = tensor("gMcp")
+UseMetric(gMcp, (U, D))
+F = tensor("F")
+DeclareSym(F, (D, D), Antisymmetric((1, 2)))
+result = Simp(F(D('a'), D('a')))
+""")
+```
+
+Context files survive agent restarts:
+
+```text
+mathgr_context_save(context="default", path=".mathgr/contexts/default.json")
+mathgr_context_load(path=".mathgr/contexts/default.json", context="default")
+```
+
+Security note: raw Python tools are intended for trusted symbolic snippets from
+the agent session, not as a sandbox for hostile code. They run snippets in a
+child process with a timeout, restore MathGR global state after each call, and
+block common filesystem/shell/import paths, but Python execution is not a
+security boundary.
 
 ## Agent MCP Install Recipe
 

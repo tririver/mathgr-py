@@ -7,16 +7,16 @@ from mcp.client.stdio import stdio_client
 from mathgr.mcp_server import (
     clear_mathgr_context,
     compute_mathgr,
-    create_mathgr_context,
     evaluate_mathgr,
     get_mathgr_context,
     get_mathgr_manual,
     inspect_mathgr,
     list_mathgr_capabilities,
+    load_mathgr_context,
     parse_mathgr,
+    save_mathgr_context,
     script_mathgr,
     tex_mathgr,
-    update_mathgr_context,
 )
 
 
@@ -135,22 +135,147 @@ def test_compute_mathgr_uses_auto_declarations_and_explicit_simp_call():
     assert trace["result"] == "Dim"
 
 
-def test_compute_mathgr_allows_dimension_overrides_and_context_expressions():
-    context = create_mathgr_context("mcp_test_context")
-    update = update_mathgr_context(
-        context["context"],
-        declarations={"index_dims": {"U/D": 2}},
-        expressions={"trace": "Dta(U('a'), D('a'))"},
-    )
-    result = compute_mathgr("trace", context=context["context"])
-    fetched = get_mathgr_context(context["context"], name="trace")
-    cleared = clear_mathgr_context(context["context"])
+def test_compute_mathgr_auto_creates_default_context_and_persists_block_assignments():
+    clear_mathgr_context("default")
 
-    assert update["ok"] is True
+    result = compute_mathgr(
+        """
+trace = Dta(U('a'), D('a'))
+simplified = Simp(Dta(U('a'), D('b')) * f(U('b')))
+result = trace
+"""
+    )
+    reused = compute_mathgr("simplified")
+    rendered = tex_mathgr("simplified")
+    fetched = get_mathgr_context()
+    filtered = get_mathgr_context(name="trace")
+    cleared = clear_mathgr_context("default")
+
     assert result["ok"] is True
-    assert result["result"] == "2"
-    assert fetched["expressions"] == {"trace": "Dta(U('a'), D('a'))"}
+    assert result["context"] == "default"
+    assert result["result"] == "Dim"
+    assert reused["ok"] is True
+    assert reused["result"] == "f(U('a'))"
+    assert rendered["ok"] is True
+    assert rendered["tex"] == "f^{a}"
+    assert fetched["expressions"]["trace"] == "Dta(U('a'), D('a'))"
+    assert fetched["expressions"]["simplified"] == "Simp(Dta(U('a'), D('b')) * f(U('b')))"
+    assert filtered["expressions"] == {"trace": "Dta(U('a'), D('a'))"}
     assert cleared["ok"] is True
+
+
+def test_compute_mathgr_auto_creates_named_context_and_persists_params():
+    clear_mathgr_context("mcp_named_auto")
+
+    result = compute_mathgr(
+        """
+trace = Dta(U('a'), D('a'))
+result = trace
+""",
+        context="mcp_named_auto",
+        index_dims={"U/D": 3},
+    )
+    reused = compute_mathgr("trace", context="mcp_named_auto")
+    fetched = get_mathgr_context("mcp_named_auto")
+    clear_mathgr_context("mcp_named_auto")
+
+    assert result["ok"] is True
+    assert result["result"] == "3"
+    assert reused["ok"] is True
+    assert reused["result"] == "3"
+    assert fetched["declarations"]["index_dims"] == {"U/D": 3}
+    assert fetched["expressions"]["trace"] == "Dta(U('a'), D('a'))"
+
+
+def test_compute_mathgr_block_uses_last_expression_without_result_assignment():
+    clear_mathgr_context("mcp_last_expr")
+
+    result = compute_mathgr(
+        """
+trace = Dta(U('a'), D('a'))
+Simp(trace)
+""",
+        context="mcp_last_expr",
+        index_dims={"U/D": 4},
+    )
+    fetched = get_mathgr_context("mcp_last_expr")
+    clear_mathgr_context("mcp_last_expr")
+
+    assert result["ok"] is True
+    assert result["result"] == "4"
+    assert fetched["expressions"]["trace"] == "Dta(U('a'), D('a'))"
+
+
+def test_compute_mathgr_block_persists_metric_symmetry_and_module_aliases():
+    clear_mathgr_context("mcp_declaration_block")
+
+    result = compute_mathgr(
+        """
+gMcpBlock = tensor("gMcpBlock")
+UseMetric(gMcpBlock, (U, D))
+F = tensor("FMcpAnti")
+DeclareSym(F, (D, D), Antisymmetric((1, 2)))
+alias_value = frwadm.Simp(Dta(U('a'), D('b')) * f(U('b')))
+result = Simp(F(D('c'), D('c'))) + alias_value
+""",
+        context="mcp_declaration_block",
+    )
+    metric = compute_mathgr("Metric", context="mcp_declaration_block")
+    antisym = compute_mathgr("Simp(F(D('c'), D('c')))", context="mcp_declaration_block")
+    fetched = get_mathgr_context("mcp_declaration_block")
+    clear_mathgr_context("mcp_declaration_block")
+
+    assert result["ok"] is True
+    assert result["result"] == "f(U('a'))"
+    assert metric["ok"] is True
+    assert metric["result"] == "gMcpBlock"
+    assert antisym["ok"] is True
+    assert antisym["result"] == "0"
+    assert fetched["declarations"]["metric"] == {"head": "gMcpBlock", "indices": "U/D"}
+    assert fetched["declarations"]["symmetries"] == [
+        {"head": "F", "signature": ["D", "D"], "symmetry": "Antisymmetric", "slots": [1, 2]}
+    ]
+
+
+def test_context_save_and_load_round_trips_json(tmp_path):
+    clear_mathgr_context("mcp_save_ctx")
+    path = tmp_path / "ctx.json"
+
+    compute_mathgr(
+        """
+trace = Dta(U('a'), D('a'))
+result = trace
+""",
+        context="mcp_save_ctx",
+        index_dims={"U/D": 5},
+    )
+    saved = save_mathgr_context("mcp_save_ctx", path=str(path))
+    clear_mathgr_context("mcp_save_ctx")
+    loaded = load_mathgr_context(path=str(path), context="mcp_save_ctx")
+    result = compute_mathgr("trace", context="mcp_save_ctx")
+    clear_mathgr_context("mcp_save_ctx")
+
+    assert saved["ok"] is True
+    assert loaded["ok"] is True
+    assert result["ok"] is True
+    assert result["result"] == "5"
+    saved_json = json.loads(path.read_text(encoding="utf-8"))
+    assert saved_json["schema_version"] == 1
+    assert saved_json["context"] == "mcp_save_ctx"
+
+
+def test_compute_mathgr_rejects_unsafe_block_syntax():
+    imported = compute_mathgr("import os\nresult = 1", context="mcp_unsafe")
+    looped = compute_mathgr("for value in [1]:\n    result = value", context="mcp_unsafe")
+    opened = compute_mathgr("result = open('x')", context="mcp_unsafe")
+    clear_mathgr_context("mcp_unsafe")
+
+    assert imported["ok"] is False
+    assert "Import" in imported["stderr"] or "Unsupported syntax" in imported["stderr"]
+    assert looped["ok"] is False
+    assert "For" in looped["stderr"] or "Unsupported syntax" in looped["stderr"]
+    assert opened["ok"] is False
+    assert "open" in opened["stderr"]
 
 
 def test_compute_identity_and_inspect_mathgr_return_index_diagnostics():
@@ -225,10 +350,12 @@ def test_create_mcp_registers_mathgr_tools():
         "mathgr_compute",
         "mathgr_inspect",
         "mathgr_tex",
-        "mathgr_context_create",
-        "mathgr_context_update",
         "mathgr_context_get",
         "mathgr_context_clear",
+        "mathgr_context_save",
+        "mathgr_context_load",
         "mathgr_script",
     } <= registered
+    assert "mathgr_context_create" not in registered
+    assert "mathgr_context_update" not in registered
     assert "mathgr_topic" not in registered

@@ -1030,10 +1030,10 @@ mathgr_parse
 mathgr_compute
 mathgr_inspect
 mathgr_tex
-mathgr_context_create
-mathgr_context_update
 mathgr_context_get
 mathgr_context_clear
+mathgr_context_save
+mathgr_context_load
 mathgr_script
 mathgr_run_python
 mathgr_eval
@@ -1041,8 +1041,9 @@ mathgr_eval
 
 `mathgr_compute` is the first-choice tool for almost all MathGR calculations.
 It is usually easier than raw Python because it accepts Python-like expression
-strings and auto-declares index families, tensor heads, and scalar symbols.
-Use `mathgr_parse`, `mathgr_inspect`, and `mathgr_script` only for debugging or
+strings or multi-line notebook blocks, auto-declares index families, tensor
+heads, and scalar symbols, and persists assignments in a context. Use
+`mathgr_parse`, `mathgr_inspect`, and `mathgr_script` only for debugging or
 reproduction. Use `mathgr_run_python` / `mathgr_eval` only as last-resort
 debugging escape hatches when `mathgr_compute` cannot express the workflow.
 
@@ -1073,9 +1074,9 @@ Dimension override:
 
 `mathgr_compute(expr, ...)`
 
-: First-choice tool. Evaluates the Python-like MathGR expression exactly as
-  written, with auto-declared symbols, tensor heads, and index families. Put
-  ordinary MathGR calls directly in the expression:
+: First-choice tool. Evaluates a Python-like MathGR expression or restricted
+  multi-line block exactly as written, with auto-declared symbols, tensor heads,
+  and index families. Put ordinary MathGR calls directly in the expression:
 
 ```python
 Simp(Dta(U('a'), D('b')) * f(U('b')))
@@ -1084,6 +1085,50 @@ Decomp0i(f(DTot('a')) * f(UTot('a')))
 Ibp(y * Pd(x, D('i')))
 OO(2)((1 + Eps*x)**3)
 ```
+
+If `context` is omitted, the server uses and auto-creates `"default"`.
+Assignments in a compute block persist in that context:
+
+```python
+mathgr_compute("""
+trace = Dta(U('a'), D('a'))
+simplified = Simp(Dta(U('a'), D('b')) * f(U('b')))
+result = trace
+""")
+mathgr_compute("simplified")
+mathgr_context_get()
+```
+
+Named contexts are auto-created on first use:
+
+```python
+mathgr_compute(
+    """
+trace = Dta(U('a'), D('a'))
+result = trace
+""",
+    context="demo",
+    index_dims={"U/D": 3},
+)
+mathgr_compute("trace", context="demo")
+```
+
+Top-level `UseMetric(...)` and `DeclareSym(...)` calls in a block persist as
+structured context declarations:
+
+```python
+mathgr_compute("""
+gMcp = tensor("gMcp")
+UseMetric(gMcp, (U, D))
+F = tensor("F")
+DeclareSym(F, (D, D), Antisymmetric((1, 2)))
+result = Simp(F(D('a'), D('a')))
+""")
+```
+
+Compute blocks intentionally reject imports, loops, function/class definitions,
+`with`, private attributes, and unsafe builtins. Module aliases such as `sp`,
+`mathgr`, `adm`, `frwadm`, `gr`, `decomp`, and `typeset` are already preloaded.
 
 `mathgr_inspect(expr, ...)`
 
@@ -1094,12 +1139,25 @@ OO(2)((1 + Eps*x)**3)
 
 : Renders an expression to TeX.
 
-`mathgr_context_create`, `mathgr_context_update`, `mathgr_context_get`,
-`mathgr_context_clear`
+`mathgr_context_get(context="default", name=None)`
 
-: Store reusable declarations and named expressions in the MCP server process.
-  Contexts store source strings and are re-evaluated with isolated MathGR global
-  state for each structured operation.
+: Lists stored declarations and expression source strings. With `name`, returns
+  the stored source definition for that name only. It does not evaluate values;
+  use `mathgr_compute("name", context=...)` for that.
+
+`mathgr_context_clear(context="default")`
+
+: Deletes a context from MCP memory.
+
+`mathgr_context_save(context="default", path=None, overwrite=False)`
+
+: Saves a context as JSON. With no `path`, uses
+  `.mathgr/contexts/<context>.json`.
+
+`mathgr_context_load(path=None, context=None, overwrite=False)`
+
+: Loads a saved JSON context into MCP memory. Context JSON stores declarations
+  and expression source strings, not Python objects.
 
 `mathgr_script(expr_or_context, operation=None, ...)`
 

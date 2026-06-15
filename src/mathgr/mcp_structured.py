@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import json
 from dataclasses import dataclass
 from itertools import count
 from functools import wraps
@@ -18,6 +19,8 @@ tensor_module = import_module("mathgr.tensor")
 
 DEFAULT_OUTPUT = ("str", "tex", "diagnostics", "python")
 DEFAULT_DIM_SYMBOL = "Dim"
+DEFAULT_CONTEXT_NAME = "default"
+CONTEXT_SCHEMA_VERSION = 1
 _CONTEXT_COUNTER = count(1)
 _CONTEXTS: dict[str, dict[str, Any]] = {}
 
@@ -62,6 +65,36 @@ _SAFE_EXPR_ATTRIBUTES = {
     "xreplace",
 }
 
+_MODULE_ALIASES = {
+    "adm": "mathgr.adm",
+    "decomp": "mathgr.decomp",
+    "frwadm": "mathgr.frwadm",
+    "gr": "mathgr.gr",
+    "ibp": "mathgr.ibp",
+    "rewrite": "mathgr.rewrite",
+    "tensor": "mathgr.tensor",
+    "typeset": "mathgr.typeset",
+    "util": "mathgr.util",
+}
+
+_MODULE_ATTR_NAMES = {"sp", "mathgr", *_MODULE_ALIASES}
+
+_BLOCKED_CALL_NAMES = {
+    "__import__",
+    "compile",
+    "delattr",
+    "dir",
+    "eval",
+    "exec",
+    "getattr",
+    "globals",
+    "input",
+    "locals",
+    "open",
+    "setattr",
+    "vars",
+}
+
 
 @dataclass(frozen=True)
 class _Prepared:
@@ -69,6 +102,20 @@ class _Prepared:
     auto_declarations: dict[str, Any]
     python_prefix: list[str]
     diagnostics: list[str]
+
+
+@dataclass(frozen=True)
+class _BlockAssignment:
+    name: str
+    source: str
+
+
+@dataclass(frozen=True)
+class _ComputeBlock:
+    assignments: list[_BlockAssignment]
+    expr_sources: list[str]
+    result_source: str | None
+    statement_sources: list[str]
 
 
 class _ExpressionScanner(ast.NodeVisitor):
@@ -197,9 +244,13 @@ def compute_mathgr(
     """Auto-declare and evaluate a Python-like MathGR expression without implicit transforms."""
     started = time.perf_counter()
     try:
+        expr_text = str(expr).strip()
+        context_name = _ensure_context(context)
+        block = _parse_compute_block(expr_text)
+        prepare_exprs = block.expr_sources if block else [expr_text]
         prepared = _prepare_runtime(
-            [expr],
-            context=context,
+            prepare_exprs,
+            context=context_name,
             auto_declare=auto_declare,
             declarations=declarations,
             index_dims=index_dims,
@@ -209,10 +260,25 @@ def compute_mathgr(
             metric=metric,
             symmetries=symmetries,
         )
-        value = _eval_expr(expr, prepared.namespace)
+        if block:
+            value = _eval_block(block, prepared.namespace, context_name)
+        else:
+            value = _eval_expr(expr_text, prepared.namespace)
+        _persist_runtime_declarations(
+            context_name,
+            declarations=declarations,
+            index_dims=index_dims,
+            index_sets=index_sets,
+            tensors=tensors,
+            symbols=symbols,
+            metric=metric,
+            symmetries=symmetries,
+        )
         if store_as:
-            _store_expression(context, store_as, str(value))
-        return _operation_response(value, prepared, expr, started, output, operation="compute")
+            _store_expression(context_name, store_as, str(value))
+        response = _operation_response(value, prepared, expr_text, started, output, operation="compute")
+        response["context"] = context_name
+        return response
     except Exception as exc:
         return _error_response(exc, started)
 
@@ -619,11 +685,7 @@ def script_mathgr(
 
 def create_mathgr_context(name: str | None = None, defaults: dict[str, Any] | None = None) -> dict[str, Any]:
     context_name = name or f"ctx_{next(_CONTEXT_COUNTER)}"
-    _CONTEXTS[context_name] = {
-        "defaults": dict(defaults or {}),
-        "declarations": {},
-        "expressions": {},
-    }
+    _CONTEXTS[context_name] = _new_context_state(defaults=defaults)
     return {"ok": True, "context": context_name}
 
 
@@ -647,24 +709,73 @@ def update_mathgr_context(
     return {"ok": True, "context": context, "summary": _context_summary(context, state)}
 
 
-def get_mathgr_context(context: str, name: str | None = None, output: list[str] | None = None) -> dict[str, Any]:
-    state = _require_context(context)
+def get_mathgr_context(context: str | None = None, name: str | None = None, output: list[str] | None = None) -> dict[str, Any]:
+    context_name = _ensure_context(context)
+    state = _require_context(context_name)
     if name is not None:
         expressions = {name: state["expressions"][name]} if name in state["expressions"] else {}
     else:
         expressions = dict(state["expressions"])
     return {
         "ok": True,
-        "context": context,
+        "context": context_name,
         "declarations": dict(state["declarations"]),
         "expressions": expressions,
     }
 
 
-def clear_mathgr_context(context: str) -> dict[str, Any]:
-    existed = context in _CONTEXTS
-    _CONTEXTS.pop(context, None)
-    return {"ok": True, "context": context, "cleared": existed}
+def clear_mathgr_context(context: str | None = None) -> dict[str, Any]:
+    context_name = _context_name(context)
+    existed = context_name in _CONTEXTS
+    _CONTEXTS.pop(context_name, None)
+    return {"ok": True, "context": context_name, "cleared": existed}
+
+
+def save_mathgr_context(
+    context: str | None = None,
+    *,
+    path: str | None = None,
+    overwrite: bool = False,
+) -> dict[str, Any]:
+    context_name = _ensure_context(context)
+    state = _require_context(context_name)
+    target = _context_path(context_name, path)
+    if target.exists() and not overwrite:
+        return _error_response(FileExistsError(f"Context file exists: {target}"), time.perf_counter())
+    target.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "schema_version": CONTEXT_SCHEMA_VERSION,
+        "context": context_name,
+        "defaults": _json_ready(state["defaults"]),
+        "declarations": _json_ready(state["declarations"]),
+        "expressions": dict(state["expressions"]),
+    }
+    target.write_text(json.dumps(payload, indent=2, sort_keys=False) + "\n", encoding="utf-8")
+    return {"ok": True, "context": context_name, "path": str(target)}
+
+
+def load_mathgr_context(
+    *,
+    path: str | None = None,
+    context: str | None = None,
+    overwrite: bool = False,
+) -> dict[str, Any]:
+    source = _context_path(_context_name(context), path)
+    try:
+        payload = json.loads(source.read_text(encoding="utf-8"))
+        if payload.get("schema_version") != CONTEXT_SCHEMA_VERSION:
+            raise ValueError(f"Unsupported MathGR context schema: {payload.get('schema_version')!r}")
+        context_name = context or str(payload.get("context") or DEFAULT_CONTEXT_NAME)
+        if context_name in _CONTEXTS and not overwrite:
+            raise FileExistsError(f"Context already exists: {context_name}")
+        _CONTEXTS[context_name] = {
+            "defaults": dict(payload.get("defaults") or {}),
+            "declarations": dict(payload.get("declarations") or {}),
+            "expressions": {str(key): str(value) for key, value in (payload.get("expressions") or {}).items()},
+        }
+    except Exception as exc:
+        return _error_response(exc, time.perf_counter())
+    return {"ok": True, "context": context_name, "path": str(source), "summary": _context_summary(context_name, _CONTEXTS[context_name])}
 
 
 def _prepare_runtime(
@@ -680,9 +791,11 @@ def _prepare_runtime(
     metric: dict[str, Any] | None = None,
     symmetries: list[dict[str, Any]] | None = None,
 ) -> _Prepared:
-    context_state = _CONTEXTS.get(context) if context else None
+    context_name = _context_name(context)
+    use_context = context is not None or context_name in _CONTEXTS
+    context_state = _CONTEXTS.get(context_name) if use_context else None
     if context and context_state is None:
-        raise ValueError(f"Unknown MathGR context: {context}")
+        raise ValueError(f"Unknown MathGR context: {context_name}")
 
     merged = _merged_declarations(
         context_state.get("declarations") if context_state else None,
@@ -760,6 +873,7 @@ def _prepare_runtime(
             auto_symbols.add(name)
             python_prefix.append(f"{name} = sp.Symbol('{name}')")
 
+    _apply_context_declaration_heads(namespace, python_prefix, context_exprs, merged)
     _apply_metric_declaration(namespace, python_prefix, merged.get("metric"))
     _apply_symmetry_declarations(namespace, python_prefix, merged.get("symmetries", ()))
 
@@ -781,6 +895,7 @@ def _prepare_runtime(
 
 def _base_namespace() -> dict[str, Any]:
     namespace: dict[str, Any] = {"sp": sp, "mathgr": mathgr}
+    namespace.update({alias: import_module(module_name) for alias, module_name in _MODULE_ALIASES.items()})
     namespace.update(_SYMPY_NAMES)
     namespace.update({name: getattr(mathgr, name) for name in mathgr.__all__ if hasattr(mathgr, name)})
     return namespace
@@ -792,6 +907,17 @@ def _known_names() -> set[str]:
 
 def _parse_safe_expr(expr: str) -> ast.Expression:
     tree = ast.parse(str(expr), mode="eval")
+    _validate_safe_expr_tree(tree)
+    return tree
+
+
+def _validate_safe_expr_node(node: ast.AST) -> None:
+    tree = ast.Expression(body=node)
+    ast.fix_missing_locations(tree)
+    _validate_safe_expr_tree(tree)
+
+
+def _validate_safe_expr_tree(tree: ast.AST) -> None:
     for node in ast.walk(tree):
         if isinstance(
             node,
@@ -820,22 +946,185 @@ def _parse_safe_expr(expr: str) -> ast.Expression:
         ):
             if isinstance(node, ast.Attribute) and not _safe_attribute(node):
                 raise ValueError(
-                    "Only sp.<name>, mathgr.<name>, and safe expression methods are allowed in MCP expressions."
+                    "Only safe module attributes and expression methods are allowed in MCP expressions."
                 )
+            if isinstance(node, ast.Call) and _blocked_call(node):
+                raise ValueError(f"Call {node.func.id!r} is not available in MCP expressions.")
             continue
         raise ValueError(f"Unsupported syntax in MCP expression: {type(node).__name__}")
-    return tree
 
 
 def _safe_attribute(node: ast.Attribute) -> bool:
-    if isinstance(node.value, ast.Name) and node.value.id in {"sp", "mathgr"}:
+    if node.attr.startswith("_"):
+        return False
+    if isinstance(node.value, ast.Name) and node.value.id in _MODULE_ATTR_NAMES:
         return True
     return node.attr in _SAFE_EXPR_ATTRIBUTES and not node.attr.startswith("_")
+
+
+def _blocked_call(node: ast.Call) -> bool:
+    return isinstance(node.func, ast.Name) and node.func.id in _BLOCKED_CALL_NAMES
 
 
 def _eval_expr(expr: str, namespace: dict[str, Any]):
     tree = _parse_safe_expr(expr)
     return eval(compile(tree, "<mathgr-mcp-expr>", "eval"), {"__builtins__": {}}, namespace)
+
+
+def _parse_compute_block(source: str) -> _ComputeBlock | None:
+    text = str(source)
+    try:
+        _parse_safe_expr(text)
+        return None
+    except SyntaxError:
+        pass
+
+    tree = ast.parse(text, mode="exec")
+    if len(tree.body) == 1 and isinstance(tree.body[0], ast.Expr):
+        raise ValueError("Unsupported syntax in MCP expression.")
+
+    assignments: list[_BlockAssignment] = []
+    expr_sources: list[str] = []
+    result_source: str | None = None
+    statement_sources: list[str] = []
+
+    for stmt in tree.body:
+        if isinstance(stmt, ast.Assign):
+            if len(stmt.targets) != 1 or not isinstance(stmt.targets[0], ast.Name):
+                raise ValueError("Only simple name assignments are supported in MCP compute blocks.")
+            _validate_safe_expr_node(stmt.value)
+            name = stmt.targets[0].id
+            value_source = _source_segment(text, stmt.value)
+            assignment = _BlockAssignment(name=name, source=value_source)
+            assignments.append(assignment)
+            expr_sources.append(value_source)
+            statement_sources.append(f"{name} = {value_source}")
+            if name == "result":
+                result_source = value_source
+            continue
+        if isinstance(stmt, ast.Expr):
+            _validate_safe_expr_node(stmt.value)
+            stmt_source = _source_segment(text, stmt.value)
+            if not _is_declaration_call(stmt.value):
+                result_source = stmt_source
+            expr_sources.append(stmt_source)
+            statement_sources.append(stmt_source)
+            continue
+        raise ValueError(f"Unsupported syntax in MCP compute block: {type(stmt).__name__}")
+
+    if result_source is None and assignments:
+        result_source = assignments[-1].name
+    return _ComputeBlock(
+        assignments=assignments,
+        expr_sources=expr_sources,
+        result_source=result_source,
+        statement_sources=statement_sources,
+    )
+
+
+def _source_segment(source: str, node: ast.AST) -> str:
+    return (ast.get_source_segment(source, node) or ast.unparse(node)).strip()
+
+
+def _call_name(node: ast.AST) -> str:
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+        return node.func.id
+    return ""
+
+
+def _is_declaration_call(node: ast.AST) -> bool:
+    return _call_name(node) in {"UseMetric", "DeclareSym"}
+
+
+def _eval_block(block: _ComputeBlock, namespace: dict[str, Any], context: str) -> Any:
+    pending_expressions: list[_BlockAssignment] = []
+    for statement in block.statement_sources:
+        tree = ast.parse(statement, mode="exec")
+        stmt = tree.body[0]
+        if isinstance(stmt, ast.Assign):
+            name = stmt.targets[0].id
+            value_source = _source_segment(statement, stmt.value)
+            namespace[name] = _eval_expr(value_source, namespace)
+            pending_expressions.append(_BlockAssignment(name=name, source=value_source))
+            continue
+        if isinstance(stmt, ast.Expr):
+            expr_source = _source_segment(statement, stmt.value)
+            if _is_declaration_call(stmt.value):
+                _eval_declaration_call(stmt.value, expr_source, namespace, context)
+            else:
+                namespace["_"] = _eval_expr(expr_source, namespace)
+
+    for assignment in pending_expressions:
+        _store_expression(context, assignment.name, assignment.source)
+    if any(assignment.name == "result" for assignment in pending_expressions):
+        return namespace["result"]
+    if block.result_source is None:
+        return namespace.get("_", "")
+    if block.result_source in namespace:
+        return namespace[block.result_source]
+    return _eval_expr(block.result_source, namespace)
+
+
+def _eval_declaration_call(node: ast.Call, source: str, namespace: dict[str, Any], context: str) -> None:
+    _eval_expr(source, namespace)
+    namespace["Metric"] = mathgr.Metric
+    namespace["IdxOfMetric"] = mathgr.IdxOfMetric
+    if _call_name(node) == "UseMetric":
+        _persist_metric_call(node, namespace, context)
+    elif _call_name(node) == "DeclareSym":
+        _persist_symmetry_call(node, context)
+
+
+def _persist_metric_call(node: ast.Call, namespace: dict[str, Any], context: str) -> None:
+    if len(node.args) < 1:
+        return
+    head_value = _eval_expr(ast.unparse(node.args[0]), namespace)
+    head = getattr(head_value, "name", None) or (
+        node.args[0].id if isinstance(node.args[0], ast.Name) else str(head_value)
+    )
+    pair = "U/D"
+    if len(node.args) >= 2:
+        pair_names = _names_tuple(node.args[1])
+        if len(pair_names) == 2:
+            pair = _pair_key(pair_names)
+    _require_context(context)["declarations"]["metric"] = {"head": str(head), "indices": pair}
+
+
+def _persist_symmetry_call(node: ast.Call, context: str) -> None:
+    if len(node.args) < 3:
+        return
+    head = node.args[0].id if isinstance(node.args[0], ast.Name) else ast.unparse(node.args[0])
+    signature = list(_names_tuple(node.args[1]))
+    kind, slots = _symmetry_spec(node.args[2])
+    item = {"head": head, "signature": signature, "symmetry": kind, "slots": list(slots)}
+    symmetries = _require_context(context)["declarations"].setdefault("symmetries", [])
+    if item not in symmetries:
+        symmetries.append(item)
+
+
+def _names_tuple(node: ast.AST) -> tuple[str, ...]:
+    if isinstance(node, (ast.Tuple, ast.List)):
+        values = []
+        for item in node.elts:
+            if isinstance(item, ast.Name):
+                values.append(item.id)
+            else:
+                values.append(ast.unparse(item))
+        return tuple(values)
+    return ()
+
+
+def _symmetry_spec(node: ast.AST) -> tuple[str, tuple[Any, ...]]:
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+        kind = node.func.id
+        if node.args:
+            slots_node = node.args[0]
+            if isinstance(slots_node, (ast.Tuple, ast.List)):
+                return kind, tuple(int(item.value) for item in slots_node.elts if isinstance(item, ast.Constant))
+            if isinstance(slots_node, ast.Constant) and slots_node.value == "All":
+                return kind, ("All",)
+        return kind, (1, 2)
+    return "Symmetric", (1, 2)
 
 
 def _index_pair_for_name(name: str) -> tuple[str, str] | None:
@@ -934,6 +1223,31 @@ def _merge_context_declarations(target: dict[str, Any], incoming: dict[str, Any]
             target[key] = value
 
 
+def _persist_runtime_declarations(
+    context: str,
+    *,
+    declarations: dict[str, Any] | None = None,
+    index_dims: dict[str, Any] | None = None,
+    index_sets: dict[str, str] | None = None,
+    tensors: list[str] | None = None,
+    symbols: list[str] | None = None,
+    metric: dict[str, Any] | None = None,
+    symmetries: list[dict[str, Any]] | None = None,
+) -> None:
+    state = _require_context(context)
+    merged = _merged_declarations(
+        declarations,
+        index_dims=index_dims,
+        index_sets=index_sets,
+        tensors=tensors,
+        symbols=symbols,
+        metric=metric,
+        symmetries=symmetries,
+    )
+    if merged:
+        _merge_context_declarations(state["declarations"], merged)
+
+
 def _apply_metric_declaration(namespace: dict[str, Any], python_prefix: list[str], metric: dict[str, Any] | None) -> None:
     if not metric:
         return
@@ -944,6 +1258,8 @@ def _apply_metric_declaration(namespace: dict[str, Any], python_prefix: list[str
         namespace[head] = mathgr.tensor(head)
         python_prefix.append(f"{head} = tensor('{head}')")
     mathgr.UseMetric(namespace[head], (namespace[up_name], namespace[down_name]))
+    namespace["Metric"] = mathgr.Metric
+    namespace["IdxOfMetric"] = mathgr.IdxOfMetric
     python_prefix.append(f"UseMetric({head}, ({up_name}, {down_name}))")
 
 
@@ -959,6 +1275,24 @@ def _apply_symmetry_declarations(namespace: dict[str, Any], python_prefix: list[
         symmetry = mathgr.Antisymmetric(slots) if kind == "Antisymmetric" else mathgr.Symmetric(slots)
         mathgr.DeclareSym(namespace[head], signature, symmetry)
         python_prefix.append(f"DeclareSym({head}, {tuple(item['signature'])!r}, {kind}({slots!r}))")
+
+
+def _apply_context_declaration_heads(
+    namespace: dict[str, Any],
+    python_prefix: list[str],
+    context_exprs: dict[str, str],
+    declarations: dict[str, Any],
+) -> None:
+    heads: set[str] = set()
+    metric = declarations.get("metric")
+    if metric:
+        heads.add(str(metric["head"]))
+    for item in declarations.get("symmetries", ()):
+        heads.add(str(item["head"]))
+    for head in sorted(heads):
+        if head in context_exprs:
+            namespace[head] = _eval_expr(context_exprs[head], namespace)
+            python_prefix.append(f"{head} = {context_exprs[head]}")
 
 
 def _operation_response(
@@ -980,12 +1314,13 @@ def _operation_response(
     }
     if changed is not None:
         response["changed"] = changed
+    tensor_head_value = _is_tensor_head(value)
     if "tex" in requested:
-        response["tex"] = _tex(value, fragment=True)
+        response["tex"] = str(value) if tensor_head_value else _tex(value, fragment=True)
     if "idx" in requested or "indices" in requested:
-        response["idx"] = _labels(mathgr.idx(value))
-    response["free"] = _labels(mathgr.free(value))
-    response["dummy"] = _labels(mathgr.dummy(value))
+        response["idx"] = [] if tensor_head_value else _labels(mathgr.idx(value))
+    response["free"] = [] if tensor_head_value else _labels(mathgr.free(value))
+    response["dummy"] = [] if tensor_head_value else _labels(mathgr.dummy(value))
     if "python" in requested:
         response["python"] = _script_for_expression(prepared, expr, operation=operation)
     if "diagnostics" in requested:
@@ -1011,6 +1346,10 @@ def _labels(values) -> list[Any]:
     return [value if isinstance(value, int) else str(value) for value in values]
 
 
+def _is_tensor_head(value) -> bool:
+    return type(value).__name__ == "TensorHead" and hasattr(value, "name")
+
+
 def _tex(value, *, fragment: bool = True) -> str:
     import mathgr.typeset as typeset
 
@@ -1025,6 +1364,9 @@ def _tex(value, *, fragment: bool = True) -> str:
 def _script_for_expression(prepared: _Prepared, expr: str | None, *, operation: str | None) -> str:
     lines = list(prepared.python_prefix)
     if expr:
+        if "\n" in str(expr):
+            lines.extend(line for line in str(expr).strip().splitlines() if line.strip())
+            return "\n".join(lines)
         if operation == "simplify":
             lines.append(f"result = Simp({expr})")
         elif operation == "compare":
@@ -1133,10 +1475,44 @@ def _store_expression(context: str | None, name: str, expr: str) -> None:
     _require_context(context)["expressions"][name] = expr
 
 
+def _context_name(context: str | None = None) -> str:
+    return str(context or DEFAULT_CONTEXT_NAME)
+
+
+def _new_context_state(defaults: dict[str, Any] | None = None) -> dict[str, Any]:
+    return {
+        "defaults": dict(defaults or {}),
+        "declarations": {},
+        "expressions": {},
+    }
+
+
+def _ensure_context(context: str | None = None) -> str:
+    context_name = _context_name(context)
+    _CONTEXTS.setdefault(context_name, _new_context_state())
+    return context_name
+
+
 def _require_context(context: str) -> dict[str, Any]:
     if context not in _CONTEXTS:
         raise ValueError(f"Unknown MathGR context: {context}")
     return _CONTEXTS[context]
+
+
+def _context_path(context: str, path: str | None) -> Path:
+    if path:
+        return Path(path)
+    return Path(".mathgr") / "contexts" / f"{context}.json"
+
+
+def _json_ready(value):
+    if isinstance(value, dict):
+        return {str(key): _json_ready(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_ready(item) for item in value]
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    return str(value)
 
 
 def _context_summary(context: str, state: dict[str, Any]) -> dict[str, Any]:
@@ -1189,10 +1565,12 @@ def _select_query_lines(content: str, query: str) -> str:
 def _fallback_manual_text() -> str:
     return """# MathGR MCP
 
-Use `mathgr_parse` to inspect auto declarations, `mathgr_compute` to evaluate
-Python-like MathGR expressions with explicit `Simp`, `Decomp0i`, `Ibp`, or
-other MathGR calls, and `mathgr_run_python` only when structured tools cannot
-express the calculation.
+Use `mathgr_compute` first. It evaluates Python-like MathGR expressions or
+multi-line notebook blocks, auto-declares common tensor/index names, and
+persists assignments in the default or named context. Use `mathgr_context_get`
+to list context source definitions, `mathgr_context_save/load` for JSON
+persistence, and `mathgr_run_python` only when structured tools cannot express
+the calculation.
 """
 
 

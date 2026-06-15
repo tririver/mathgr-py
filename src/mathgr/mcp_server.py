@@ -17,14 +17,14 @@ import mathgr
 from .mcp_structured import (
     clear_mathgr_context,
     compute_mathgr,
-    create_mathgr_context,
     get_mathgr_context,
     get_mathgr_manual,
     inspect_mathgr,
+    load_mathgr_context,
     parse_mathgr,
+    save_mathgr_context,
     script_mathgr,
     tex_mathgr,
-    update_mathgr_context,
 )
 
 
@@ -135,10 +135,10 @@ CAPABILITIES = {
         "mathgr_script",
     ],
     "mcp_context": [
-        "mathgr_context_create",
-        "mathgr_context_update",
         "mathgr_context_get",
         "mathgr_context_clear",
+        "mathgr_context_save",
+        "mathgr_context_load",
     ],
     "mcp_docs": [
         "mathgr_manual",
@@ -401,9 +401,10 @@ def create_mcp():
         SERVER_NAME,
         instructions=(
             "MathGR symbolic tensor/GR toolkit. PRIMARY RULE: use mathgr_compute "
-            "as the first-choice tool for almost all MathGR calculations. Put "
-            "ordinary MathGR calls such as Simp, Decomp0i, Ibp, OO(2), ToTeXString "
-            "inside the expression. Use mathgr_parse, mathgr_inspect, and "
+            "as the first-choice tool for almost all MathGR calculations. It accepts "
+            "single expressions and multi-line notebook blocks with assignments. "
+            "Put ordinary MathGR calls such as Simp, Decomp0i, Ibp, OO(2), ToTeXString "
+            "inside mathgr_compute. Use mathgr_parse, mathgr_inspect, and "
             "mathgr_script only for debugging/reproduction. Use mathgr_run_python "
             "or mathgr_eval only as last-resort debugging escape hatches when "
             "mathgr_compute cannot express the workflow. Use mathgr_manual for docs."
@@ -477,7 +478,7 @@ def create_mcp():
         store_as: str | None = None,
         timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
     ) -> dict[str, Any]:
-        """PRIMARY calculation tool: auto-declare and evaluate Python-like MathGR with explicit Simp/Ibp/etc."""
+        """PRIMARY calculation tool: evaluate expressions or multi-line notebook blocks; persists assignments in context."""
         return compute_mathgr(
             expr,
             context=context,
@@ -549,40 +550,36 @@ def create_mcp():
         )
 
     @mcp.tool()
-    def mathgr_context_create(name: str | None = None, defaults: dict[str, Any] | None = None) -> dict[str, Any]:
-        """Create a reusable MathGR context for declarations and named expressions."""
-        return create_mathgr_context(name=name, defaults=defaults)
-
-    @mcp.tool()
-    def mathgr_context_update(
-        context: str,
-        declarations: dict[str, Any] | None = None,
-        expressions: dict[str, str] | None = None,
-        metric: dict[str, Any] | None = None,
-        symmetries: list[dict[str, Any]] | None = None,
-    ) -> dict[str, Any]:
-        """Add declarations, metric/symmetry data, or named expressions to a context."""
-        return update_mathgr_context(
-            context,
-            declarations=declarations,
-            expressions=expressions,
-            metric=metric,
-            symmetries=symmetries,
-        )
-
-    @mcp.tool()
     def mathgr_context_get(
-        context: str,
+        context: str = "default",
         name: str | None = None,
         output: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Fetch a context summary or one stored expression."""
+        """List stored context declarations/expressions, or one stored source definition by name."""
         return get_mathgr_context(context, name=name, output=output)
 
     @mcp.tool()
-    def mathgr_context_clear(context: str) -> dict[str, Any]:
+    def mathgr_context_clear(context: str = "default") -> dict[str, Any]:
         """Clear a named MathGR context."""
         return clear_mathgr_context(context)
+
+    @mcp.tool()
+    def mathgr_context_save(
+        context: str = "default",
+        path: str | None = None,
+        overwrite: bool = False,
+    ) -> dict[str, Any]:
+        """Save context declarations and expression source strings to JSON."""
+        return save_mathgr_context(context, path=path, overwrite=overwrite)
+
+    @mcp.tool()
+    def mathgr_context_load(
+        path: str | None = None,
+        context: str | None = None,
+        overwrite: bool = False,
+    ) -> dict[str, Any]:
+        """Load a saved JSON context into MCP memory."""
+        return load_mathgr_context(path=path, context=context, overwrite=overwrite)
 
     @mcp.tool()
     def mathgr_script(
