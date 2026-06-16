@@ -54,6 +54,8 @@ metric_rules = [
 
 
 def decomp_hook(expr):
+    if tensor_head_name(expr) != "g":
+        return expr
     return ReplaceAll(expr, metric_rules)
 
 
@@ -73,7 +75,11 @@ def action_density(*, simplify=True):
 
 
 def action_order(order):
-    expr = OO(order)(action_density(simplify=True))
+    return _action_order_from_density(order, action_density(simplify=True))
+
+
+def _action_order_from_density(order, density):
+    expr = OO(order)(density)
     expr = _collapse_scalar_spatial_delta_traces(expr)
     return Simp(_canonicalize_potential_derivatives(expr))
 
@@ -93,9 +99,10 @@ def main(*, compute_action=False):
         "action_density": action_density(simplify=compute_action),
     }
     if compute_action:
-        results["s0"] = action_order(0)
-        results["s1"] = action_order(1)
-        results["s2"] = action_order(2)
+        density = results["action_density"]
+        results["s0"] = _action_order_from_density(0, density)
+        results["s1"] = _action_order_from_density(1, density)
+        results["s2"] = _action_order_from_density(2, density)
     return results
 
 

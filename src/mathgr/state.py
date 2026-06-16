@@ -48,6 +48,7 @@ def restore_state(state: MathGRState, *, clear_sympy_cache: bool = False) -> Non
     tensor_module = import_module("mathgr.tensor")
     decomp_module = import_module("mathgr.decomp")
     gr_module = import_module("mathgr.gr")
+    util_module = import_module("mathgr.util")
     typeset_module = import_module("mathgr.typeset")
 
     tensor_module._INDEX_TYPES.clear()
@@ -77,6 +78,8 @@ def restore_state(state: MathGRState, *, clear_sympy_cache: bool = False) -> Non
     gr_module.IdxOfMetric = values["idx_of_metric"]
     typeset_module.ToTeXHook[:] = values["tex_hook"]
     typeset_module.ToTeXTemplate = values["tex_template"]
+    tensor_module._clear_canonicalization_caches()
+    util_module._clear_series_caches()
 
     if clear_sympy_cache:
         sp.core.cache.clear_cache()

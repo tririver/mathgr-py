@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter, OrderedDict
+from functools import lru_cache
 from itertools import count
 
 import sympy as sp
@@ -21,6 +22,25 @@ from .tensor import (
     tensor_head_name,
 )
 from .util_private import apply2term, prod
+
+
+_SERIES_CACHE_SIZE = 1024
+_SERIES_CACHED_FUNCTIONS = []
+
+
+def _series_cache(func):
+    cached = lru_cache(maxsize=_SERIES_CACHE_SIZE)(func)
+    _SERIES_CACHED_FUNCTIONS.append(cached)
+    return cached
+
+
+def _clear_series_caches():
+    for func in _SERIES_CACHED_FUNCTIONS:
+        func.cache_clear()
+
+
+def _series_cache_infos():
+    return {func.__name__: func.cache_info() for func in _SERIES_CACHED_FUNCTIONS}
 
 
 Eps = sp.Symbol("Eps")
@@ -241,8 +261,13 @@ def _iter_indices(expr):
 
 
 def TSeries(expr, series_spec):
+    return _TSeries_cached(sp.sympify(expr), tuple(series_spec))
+
+
+@_series_cache
+def _TSeries_cached(expr, series_spec):
     symbol, start, order = series_spec
-    prepared = _prepare_series_expr(sp.sympify(expr), symbol, start, order)
+    prepared = _prepare_series_expr(expr, symbol, start, order)
     protected, restore_indices = _protect_indices_for_series(prepared)
     expanded = sp.series(protected, symbol, start, order + 1).removeO().xreplace(restore_indices)
     return _expand_tensor_powers_in_series(expanded)
@@ -256,6 +281,7 @@ def _protect_indices_for_series(expr):
     return expr.xreplace(replacements), {replacement: index for index, replacement in replacements.items()}
 
 
+@_series_cache
 def _prepare_series_expr(expr, symbol, start, order):
     expr = sp.sympify(expr)
     if is_pdt(expr):
@@ -276,6 +302,7 @@ def _series_partial_derivative(expr, symbol, start, order):
     return differentiated
 
 
+@_series_cache
 def _drop_series_symbol_derivatives(expr, symbol):
     expr = sp.sympify(expr)
     if is_pdt(expr):
@@ -290,6 +317,7 @@ def _drop_series_symbol_derivatives(expr, symbol):
     return expr.func(*rewritten_args)
 
 
+@_series_cache
 def _expand_tensor_powers_in_series(expr):
     expr = sp.sympify(expr)
     if isinstance(expr, sp.Pow) and expr.exp.is_Integer and expr.exp > 1 and any(True for _ in _iter_indices(expr.base)):

@@ -1,7 +1,7 @@
 import sympy as sp
 
 import mathgr
-from mathgr.tensor import DN, Pd, PdT, PdVars, Simp, declare_idx, tensor
+from mathgr.tensor import DN, UP, Pd, PdT, PdVars, Simp, declare_idx, tensor
 from mathgr import util
 from mathgr.util import Eps, LocalToK, MomentumLabel, OO, SS, TPower, TSeries, k
 
@@ -102,6 +102,27 @@ def test_tseries_matches_upstream_simp_through_seriesdata_cell():
     series = TSeries((1 + Eps * xx) * (1 + Eps * yy) * (1 + Eps * zz) * ff(DN("a")), (Eps, 0, 1))
 
     assert Simp(series).xreplace({Eps: 1}) == sp.expand((1 + xx + yy + zz) * ff(DN("a")))
+
+
+def test_tseries_cache_hits_and_clears_after_metric_registry_change():
+    from mathgr.gr import UseMetric
+    from mathgr.state import isolated_state
+
+    with isolated_state():
+        metric = tensor("metricTSeriesCache")
+        expr = PdT(metric(UP("a"), UP("b")), PdVars(DN("c")))
+
+        util._clear_series_caches()
+        assert TSeries(expr, [Eps, 0, 1]) == expr
+        assert TSeries(expr, (Eps, 0, 1)) == expr
+        assert util._series_cache_infos()["_TSeries_cached"].hits >= 1
+
+        UseMetric(metric, (UP, DN), SetAsDefault=False)
+
+        assert util._series_cache_infos()["_TSeries_cached"].currsize == 0
+        assert TSeries(expr, (Eps, 0, 1)) == (
+            -metric(UP("d"), UP("b")) * metric(UP("e"), UP("a")) * Pd(metric(DN("d"), DN("e")), DN("c"))
+        )
 
 
 def test_local_to_k_matches_upstream_single_term_example():
