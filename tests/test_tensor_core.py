@@ -76,6 +76,78 @@ def test_declare_idx_records_duals_dimension_and_sets():
     assert d.color == "Blue"
 
 
+def test_index_name_label_access_avoids_sympy_symbol_string_printer(monkeypatch):
+    index = DN("α")
+    wild_index = DN(sp.Wild("wild_index_label"))
+    integer_index = DN(1)
+
+    def fail_symbol_str(_symbol):
+        raise AssertionError("Index metadata access should use Symbol.name, not Symbol.__str__")
+
+    monkeypatch.setattr(sp.Symbol, "__str__", fail_symbol_str)
+
+    assert index.head_name == "DN"
+    assert index.label == "α"
+    assert index.with_label("β") == DN("β")
+    assert wild_index.label == sp.Wild("wild_index_label")
+    assert integer_index.label == 1
+
+
+def test_dummy_index_key_reads_index_head_name_once(monkeypatch):
+    index = DN("α")
+    calls = 0
+    original_head_name = tensor_module.Index.head_name.fget
+
+    def counted_head_name(self):
+        nonlocal calls
+        calls += 1
+        return original_head_name(self)
+
+    monkeypatch.setattr(tensor_module.Index, "head_name", property(counted_head_name))
+
+    assert tensor_module._dummy_index_key(index) == (("DN", "UP"), "α")
+    assert calls == 1
+
+
+def test_declared_symmetry_cache_hits_and_clears_after_symmetry_change():
+    from mathgr.state import isolated_state
+
+    with isolated_state():
+        head = tensor("cacheSymmetryHead")
+        expr = head(DN("β"), DN("α"))
+
+        tensor_module._clear_canonicalization_caches()
+        tensor_module._canonicalize_declared_symmetries(expr)
+        tensor_module._canonicalize_declared_symmetries(expr)
+        assert tensor_module._canonicalization_cache_infos()["_canonicalize_declared_symmetries"].hits >= 1
+
+        DeclareSym(head, (DN, DN), Symmetric((1, 2)))
+
+        assert tensor_module._canonicalization_cache_infos()["_canonicalize_declared_symmetries"].currsize == 0
+        assert tensor_module._canonicalize_declared_symmetries(expr) == head(DN("α"), DN("β"))
+
+
+def test_restore_state_clears_canonicalization_caches():
+    from mathgr.state import restore_state, snapshot_state
+
+    state = snapshot_state()
+    try:
+        head = tensor("cacheRestoreHead")
+        expr = head(DN("β"), DN("α"))
+
+        tensor_module._clear_canonicalization_caches()
+        DeclareSym(head, (DN, DN), Symmetric((1, 2)))
+        assert tensor_module._canonicalize_declared_symmetries(expr) == head(DN("α"), DN("β"))
+        assert tensor_module._canonicalization_cache_infos()["_canonicalize_declared_symmetries"].currsize >= 1
+
+        restore_state(state)
+
+        assert tensor_module._canonicalization_cache_infos()["_canonicalize_declared_symmetries"].currsize == 0
+        assert tensor_module._canonicalize_declared_symmetries(expr) == expr
+    finally:
+        restore_state(state)
+
+
 def test_public_index_name_pools_are_exported_from_package_root_like_upstream():
     assert mathgr.LatinIdx is tensor_module.LatinIdx
 

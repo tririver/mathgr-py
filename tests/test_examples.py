@@ -135,6 +135,57 @@ def test_newton_gauge_example_ports_local_decompg2h_and_action_cell():
     assert not results["action_density"].has(DTot("a"), UTot("a"))
 
 
+def test_newton_gauge_decomp_hook_skips_non_metric_nodes(monkeypatch):
+    from examples import newton_gauge
+    from mathgr.util import Eps
+
+    x = sp.Symbol("xNewtonGaugeDecompHook")
+    non_metric = x + 1
+    replace_all = newton_gauge.ReplaceAll
+
+    def fail_replace_all(expr, rules):
+        raise AssertionError(f"ReplaceAll should not run for non-metric node: {expr}")
+
+    monkeypatch.setattr(newton_gauge, "ReplaceAll", fail_replace_all)
+
+    assert newton_gauge.decomp_hook(non_metric) == non_metric
+
+    monkeypatch.setattr(newton_gauge, "ReplaceAll", replace_all)
+    assert newton_gauge.decomp_hook(newton_gauge.g(DE(0), DE(0))) == newton_gauge.a**2 * (1 + 2 * Eps * newton_gauge.φ)
+
+
+def test_newton_gauge_main_reuses_computed_action_density(monkeypatch):
+    from examples import newton_gauge
+
+    density = sp.Symbol("densityNewtonGaugeMain")
+    density_calls = 0
+    order_calls = []
+
+    def fake_action_density(*, simplify=True):
+        nonlocal density_calls
+        assert simplify is True
+        density_calls += 1
+        return density
+
+    def fail_action_order(order):
+        raise AssertionError(f"main should reuse action_density for order {order}")
+
+    def fake_action_order_from_density(order, expr):
+        order_calls.append((order, expr))
+        return sp.Symbol(f"s{order}NewtonGaugeMain")
+
+    monkeypatch.setattr(newton_gauge, "action_density", fake_action_density)
+    monkeypatch.setattr(newton_gauge, "action_order", fail_action_order)
+    monkeypatch.setattr(newton_gauge, "_action_order_from_density", fake_action_order_from_density, raising=False)
+
+    results = newton_gauge.main(compute_action=True)
+
+    assert density_calls == 1
+    assert order_calls == [(0, density), (1, density), (2, density)]
+    assert results["action_density"] == density
+    assert results["s2"] == sp.Symbol("s2NewtonGaugeMain")
+
+
 @pytest.mark.slow
 def test_newton_gauge_example_ports_background_and_linear_action_cells():
     from examples import newton_gauge

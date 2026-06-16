@@ -1,3 +1,5 @@
+import time
+
 import sympy as sp
 import pytest
 
@@ -284,7 +286,9 @@ def test_decompse_non_diagonal_metric_derivative_hooks_simplify_curvature_path()
         UseMetric(η, (U1, D1), SetAsDefault=False)
         UseMetric(γ, (U2, D2), SetAsDefault=False)
 
+        started = time.perf_counter()
         result = Simp(DecompSe(Simp(R()), hooks=(metric_hook, derivative_hook)), hooks=(derivative_hook,))
+        assert time.perf_counter() - started < 30
 
         bad_derivatives = []
         for node in sp.preorder_traversal(result):
@@ -398,10 +402,12 @@ def test_decompse_full_non_diagonal_metric_reduces_to_maxwell_form():
         UseMetric(η, (U1, D1), SetAsDefault=False)
         UseMetric(γ, (U2, D2), SetAsDefault=False)
 
+        started = time.perf_counter()
         result = Simp(
             DecompSe(Simp(R()), hooks=(metric_hook, derivative_hook)),
             hooks=(derivative_hook,),
         )
+        assert time.perf_counter() - started < 30
 
         α, β, γi, delta = "α", "β", "γ", "delta"
         # docs-local/fix.md records a Mathematica oracle with the opposite

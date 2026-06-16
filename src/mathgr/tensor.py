@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
+from functools import lru_cache
 from itertools import combinations, count, permutations, product
 from math import factorial
+import sys
 from typing import Any
 
 import sympy as sp
@@ -33,6 +35,32 @@ _MAX_HOOK_ITERATIONS = 10
 _MAX_PRODUCT_SYMMETRY_VARIANTS = 256
 _MAX_DUMMY_RENAME_VARIANTS = 2048
 _MAX_FULL_DUMMY_RENAME_KEYS = 5
+_CANONICALIZATION_CACHE_SIZE = 1024
+_CANONICALIZATION_CACHED_FUNCTIONS = []
+
+
+def _canonicalization_cache(func):
+    cached = lru_cache(maxsize=_CANONICALIZATION_CACHE_SIZE)(func)
+    _CANONICALIZATION_CACHED_FUNCTIONS.append(cached)
+    return cached
+
+
+def _clear_canonicalization_caches():
+    for func in _CANONICALIZATION_CACHED_FUNCTIONS:
+        func.cache_clear()
+    util_module = sys.modules.get("mathgr.util")
+    if util_module is not None and hasattr(util_module, "_clear_series_caches"):
+        util_module._clear_series_caches()
+
+
+def _canonicalization_cache_infos():
+    return {func.__name__: func.cache_info() for func in _CANONICALIZATION_CACHED_FUNCTIONS}
+
+
+def _dummy_pool_cache_key(dummy_pool):
+    if dummy_pool is None:
+        return None
+    return tuple(dummy_pool)
 
 
 class Index(sp.Expr):
@@ -44,7 +72,10 @@ class Index(sp.Expr):
 
     @property
     def head_name(self) -> str:
-        return str(self.args[0])
+        head_expr = self.args[0]
+        if isinstance(head_expr, sp.Symbol):
+            return head_expr.name
+        return str(head_expr)
 
     @property
     def head(self) -> "IndexType":
@@ -57,6 +88,8 @@ class Index(sp.Expr):
             return int(label_expr)
         if isinstance(label_expr, sp.Wild):
             return label_expr
+        if isinstance(label_expr, sp.Symbol):
+            return label_expr.name
         return str(label_expr)
 
     def with_label(self, label) -> "Index":
@@ -162,6 +195,7 @@ def _register_index_type(index_type: IndexType) -> IndexType:
                 break
         else:
             collection.append(index_type)
+    _clear_canonicalization_caches()
     return index_type
 
 
@@ -457,6 +491,7 @@ def register_metric(metric, indices=(UP, DN)):
     pairs = _METRIC_INDEX_PAIRS.setdefault(head_symbol, [])
     if (up, down) not in pairs:
         pairs.append((up, down))
+    _clear_canonicalization_caches()
 
 
 def _metric_head_symbol(metric) -> sp.Symbol:
@@ -686,6 +721,7 @@ def DeclareSym(head, index_signature, symmetry):
         if item not in existing:
             existing.append(item)
     _SYMMETRIES[key] = existing
+    _clear_canonicalization_caches()
     return existing
 
 
@@ -721,6 +757,7 @@ def _slots_are_all(slots) -> bool:
 
 def DeleteSym(head, index_signature):
     _SYMMETRIES.pop(_symmetry_key(head, index_signature), None)
+    _clear_canonicalization_caches()
     return None
 
 
@@ -1631,6 +1668,7 @@ def _non_explicit_slots(args):
     )
 
 
+@_canonicalization_cache
 def _canonicalize_declared_symmetries(expr):
     expr = sp.sympify(expr)
     if isinstance(expr, _TensorCall):
@@ -1867,6 +1905,7 @@ def _pdt_base_is_registered_metric(expr):
     return isinstance(base, _TensorCall) and base.head_symbol in _METRIC_HEADS
 
 
+@_canonicalization_cache
 def _factor_symmetry_variants(factor):
     factor = sp.sympify(factor)
     if isinstance(factor, _TensorCall):
@@ -1876,6 +1915,7 @@ def _factor_symmetry_variants(factor):
     return ((1, factor),)
 
 
+@_canonicalization_cache
 def _pdt_symmetry_variants(expr):
     base, variables = expr.args
     if not isinstance(base, _TensorCall):
@@ -1883,6 +1923,7 @@ def _pdt_symmetry_variants(expr):
     return tuple((sign, PdT(variant, variables)) for sign, variant in _tensor_call_symmetry_variants(base))
 
 
+@_canonicalization_cache
 def _tensor_call_symmetry_variants(expr):
     signature = tuple(_signature_for_arg(arg) for arg in expr.tensor_args)
     symmetries = _SYMMETRIES.get((expr.head_symbol, signature), [])
@@ -2273,6 +2314,11 @@ def _canonicalize_dummy(term, dummy_pool=None):
 
 
 def _canonicalize_dummy_structural(term, dummy_pool=None):
+    return _canonicalize_dummy_structural_cached(sp.sympify(term), _dummy_pool_cache_key(dummy_pool))
+
+
+@_canonicalization_cache
+def _canonicalize_dummy_structural_cached(term, dummy_pool=None):
     term = _split_overused_dummy_labels(term, dummy_pool)
     indices = list(_iter_indices(term, include_explicit=False))
     if not indices:
@@ -2311,6 +2357,11 @@ def _canonicalize_dummy_structural(term, dummy_pool=None):
 
 
 def _canonicalize_dummy_by_renaming(term, dummy_pool=None):
+    return _canonicalize_dummy_by_renaming_cached(sp.sympify(term), _dummy_pool_cache_key(dummy_pool))
+
+
+@_canonicalization_cache
+def _canonicalize_dummy_by_renaming_cached(term, dummy_pool=None):
     indices = list(_iter_indices(term, include_explicit=False))
     if not indices:
         return term
@@ -2600,8 +2651,9 @@ def _dummy_index_key(index):
 
 
 def _index_family_key(index):
-    dual_name = index.head.dual_name or index.head_name
-    return tuple(sorted((index.head_name, dual_name)))
+    head_name = index.head_name
+    dual_name = _INDEX_TYPES[head_name].dual_name or head_name
+    return tuple(sorted((head_name, dual_name)))
 
 
 def _dummy_key_signatures(term, dummy_keys):
