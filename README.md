@@ -293,6 +293,18 @@ timeout 2s uv run mathgr-mcp
 
 Exit code `0` or `124` from `timeout` is acceptable. A Python traceback is not.
 
+Portable user-level install:
+
+```bash
+tools/install_mcp.sh
+```
+
+This stores a `uvx --from git+https://github.com/tririver/mathgr-py`
+command in the agent MCP config, so new sessions can start MathGR from any
+directory and do not depend on this checkout path still existing. Use
+`tools/install_mcp.sh --dev-local` only when this repository path is permanent
+and you intentionally want MCP sessions to run the local checkout.
+
 ### MCP Usage
 
 Core tools:
@@ -512,14 +524,56 @@ security boundary.
 
 This section is written for Codex, Claude Code, or another coding agent. If a
 human asks you to install MathGR MCP, execute these steps from this repository.
+Use the portable install by default. It records a GitHub `uvx` command in the
+user MCP config, not the current checkout path, so it keeps working after a
+temporary Docker or scratch directory is removed.
+
+### Portable user install
+
+1. Install for all available supported agents:
+
+```bash
+tools/install_mcp.sh
+```
+
+Equivalent explicit Codex command:
+
+```bash
+codex mcp remove mathgr || true
+codex mcp add mathgr -- env -u VIRTUAL_ENV -u PYTHONPATH \
+  /usr/local/bin/uvx --python 3.14 \
+  --from git+https://github.com/tririver/mathgr-py \
+  mathgr-mcp
+codex mcp get mathgr
+```
+
+Equivalent explicit Claude Code command:
+
+```bash
+claude mcp remove mathgr || true
+claude mcp add --scope user mathgr -- env -u VIRTUAL_ENV -u PYTHONPATH \
+  /usr/local/bin/uvx --python 3.14 \
+  --from git+https://github.com/tririver/mathgr-py \
+  mathgr-mcp
+claude mcp get mathgr
+```
+
+Once release tags exist, prefer a pinned source such as:
+
+```bash
+--from git+https://github.com/tririver/mathgr-py@v0.1.0
+```
+
+### Development checkout install
+
+Use this only when the absolute repository path is persistent. This records that
+path in the agent MCP config so MCP sessions run your local checkout.
 
 1. Resolve the absolute repo path:
 
 ```bash
 REPO="$(pwd)"
 ```
-
-Use `$REPO` for all commands below.
 
 2. Install runtime dependencies and smoke-check the stdio MCP command:
 
@@ -540,8 +594,9 @@ claude mcp get mathgr
 ```
 
 This user-scope install makes MathGR MCP available to new Claude Code sessions
-on this machine. Claude Code can also use this repo's project-scoped `.mcp.json`
-when started in the repo and approved by the user.
+on this machine as long as `$REPO` keeps existing. Claude Code can also use this
+repo's project-scoped `.mcp.json` when started in the repo and approved by the
+user.
 
 4. Install for Codex if `codex` is available:
 
@@ -552,10 +607,17 @@ codex mcp get mathgr
 ```
 
 This user-level install makes MathGR MCP available to new Codex sessions on this
-machine. Codex can also use this repo's project-scoped `.codex/config.toml` after
-the repo is trusted.
+machine as long as `$REPO` keeps existing. Codex can also use this repo's
+project-scoped `.codex/config.toml` after the repo is trusted.
 
-5. Tell the human exactly what changed and what to do next:
+### Docker image install
+
+For disposable containers or fresh scratch directories, use the portable `uvx`
+install above. If the image should run a baked-in checkout instead, copy the repo
+to a stable path such as `/opt/mathgr-py` and use the development checkout
+install with `REPO=/opt/mathgr-py`.
+
+### Finish
 
 - Start a new Codex or Claude Code session so the MCP server is loaded at
   startup.
